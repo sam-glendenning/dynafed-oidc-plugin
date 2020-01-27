@@ -19,9 +19,7 @@
 
 import sys
 import json
-import jwt
 import time
-from cachetools import TTLCache
 
 
 # use this to strip trailing slashes so that we don't trip up any equalities due to them
@@ -39,7 +37,7 @@ class _AuthJSON(object):
     path_list = []
 
     def __init__(self):
-        with open("/etc/grid-security/oidc_auth.json", "r") as f:
+        with open("/etc/ugr/conf.d/oidc_auth.json", "r") as f:
             self.auth_dict = json.load(f)
             prefix = self.auth_dict["prefix"]
             # prepopulate path list so we don't repeatedly parse it
@@ -75,18 +73,23 @@ class _AuthJSON(object):
 # Initialize a global instance of the authlist class, to be used inside the isallowed() function
 myauthjson = _AuthJSON()
 
+
 # given a authorisation condition and the user info, does the user satisfy the condition?
 # return true or false based on condition
 def process_condition(condition, user_info):
     # empty list = don't check any attributes, so auto match
     if len(condition) == 0:
         return True
+
     if "attribute" in condition:
+        encoded_condition = { "attribute": condition["attribute"].encode("utf-8"), "value": condition["value"].encode("utf-8")}
         # only one attribute to check
-        if user_info is None or condition["attribute"] not in user_info or user_info[condition["attribute"]] != condition["value"]:
+
+        if user_info is None or encoded_condition["attribute"] not in user_info or (user_info[encoded_condition["attribute"]] != encoded_condition["value"] and encoded_condition["value"] not in user_info[encoded_condition["attribute"]]):
             return False
         else:
-            return True
+            return True 
+    
     if "or" in condition:
         # need to match one of anything in the list, so moment we match something
         # return true, if we finish without matching nothing matched so return
@@ -113,12 +116,17 @@ def process_condition(condition, user_info):
 # The main function that has to be invoked from ugr to determine if a request
 # has to be performed or not
 def isallowed(clientname="unknown", remoteaddr="nowhere", resource="none", mode="0", fqans=None, keys=None):
-    
+ 
     # Initializing the token from keys. For this to work the mod_auth_openidc plugin must hand
     # the token payload through as a header, ie:
     # OIDCPassIDTokenAs payload
-    user_info = keys["OIDC_id_token_payload"]
     
+    user_info =dict(keys)
+    
+    if "http.OIDC_CLAIM_groups" in user_info:
+	user_info["http.OIDC_CLAIM_groups"] = user_info["http.OIDC_CLAIM_groups"].split(",")
+	#user_info["http.OIDC_CLAIM_groups"] = [unicode(i, "utf-8") for i in user_info["http.OIDC_CLAIM_groups"]]
+ 
     result = myauthjson.auth_info_for_path(resource)
     if result is None:
         # failed to match anything, means the path isn't supposed protected by this plugin

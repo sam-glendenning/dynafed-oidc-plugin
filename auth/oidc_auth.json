@@ -15,73 +15,30 @@
             ], 
             "endpoint_path": "/", 
             "propogate_permissions": false
-        },
-        {
-            "allowed_ip_addresses": [], 
-            "allowed_attributes": [
-                {
-                    "attribute_requirements": {}, 
-                    "permissions": "rl"
-                }
-            ], 
-            "endpoint_path": "/oidc", 
-            "propogate_permissions": false
-        },
-        {
-            "allowed_ip_addresses": [], 
-            "allowed_attributes": [
-                {
-                    "attribute_requirements": {}, 
-                    "permissions": "rl"
-                }
-            ], 
-            "endpoint_path": "/oidc/test", 
-            "propogate_permissions": false
-        },
-        {
-            "allowed_ip_addresses": [], 
-            "allowed_attributes": [
-                {
-                    "attribute_requirements": {}, 
-                    "permissions": "rlwd"
-                }
-            ], 
-            "endpoint_path": "/oidc/test/unprotected", 
-            "propogate_permissions": true
-        }, 
-        {
+	},
+	{
             "allowed_ip_addresses": [], 
             "allowed_attributes": [
                 {
                     "attribute_requirements": {
-                        "attribute": "OIDC-groups", 
+                        "attribute": "http.OIDC_CLAIM_groups", 
                         "value": "dynafed/testEdit"
                     }, 
                     "permissions": "rlwd"
                 },
                 {
                     "attribute_requirements": {
-                        "attribute": "OIDC-groups", 
+                        "attribute": "http.OIDC_CLAIM_groups", 
                         "value": "dynafed/testReaders"
                     }, 
                     "permissions": "rl"
                 }
             ], 
-            "endpoint_path": "/oidc/test/authorised", 
+            "endpoint_path": "/dteam", 
             "propogate_permissions": true
-        }, 
-        {
-            "allowed_ip_addresses": [], 
-            "allowed_attributes": [
-                {
-                    "attribute_requirements": {}, 
-                    "permissions": "r"
-                }
-            ], 
-            "endpoint_path": "/oidc/test/unauthorised", 
-            "propogate_permissions": false
-        }
+        } 
     ], 
-    "server": "fed.cclrc.ac.uk",
-    "prefix": "/myfed"
+    "prefix": "/gridpp"
 }
+
+
