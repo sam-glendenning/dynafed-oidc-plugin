@@ -1,0 +1,44 @@
+{
+    "endpoints": [
+        {
+            "allowed_ip_addresses": [
+                {
+                    "ip": "127.0.0.1", 
+                    "permissions": "rlwd"
+                }
+            ], 
+            "allowed_attributes": [
+                {
+                    "attribute_requirements": {}, 
+                    "permissions": "rl"
+                }
+            ], 
+            "endpoint_path": "/", 
+            "propogate_permissions": false
+	},
+	{
+            "allowed_ip_addresses": [], 
+            "allowed_attributes": [
+                {
+                    "attribute_requirements": {
+                        "attribute": "http.OIDC_CLAIM_groups", 
+                        "value": "dynafed/testEdit"
+                    }, 
+                    "permissions": "rlwd"
+                },
+                {
+                    "attribute_requirements": {
+                        "attribute": "http.OIDC_CLAIM_groups", 
+                        "value": "dynafed/testReaders"
+                    }, 
+                    "permissions": "rl"
+                }
+            ], 
+            "endpoint_path": "/dteam", 
+            "propogate_permissions": true
+        } 
+    ], 
+    "prefix": "/gridpp"
+}
+
+
