@@ -173,4 +173,8 @@ def isallowed(clientname="unknown", remoteaddr="nowhere", resource="none", mode=
 if __name__ == "__main__":
     r = isallowed(sys.argv[1], sys.argv[2], sys.argv[3],
                   sys.argv[4], sys.argv[5:])
+<<<<<<< HEAD
     sys.exit(r)
+=======
+    sys.exit(r)
+>>>>>>> 950946d... Fixes
