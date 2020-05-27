@@ -86,8 +86,8 @@ def process_condition(condition, user_info):
     if "attribute" in condition:
         encoded_condition = {"attribute": condition["attribute"].encode(
             "utf-8"), "value": condition["value"].encode("utf-8")}
-        # only one attribute to check
 
+        # only one attribute to check
         if user_info is None or encoded_condition["attribute"] not in user_info or (user_info[encoded_condition["attribute"]] != encoded_condition["value"] and encoded_condition["value"] not in user_info[encoded_condition["attribute"]]):
             return False
         else:
@@ -120,17 +120,16 @@ def process_condition(condition, user_info):
 # has to be performed or not
 def isallowed(clientname="unknown", remoteaddr="nowhere", resource="none", mode="0", fqans=None, keys=None):
 
-    # Initializing the token from keys. For this to work the mod_auth_openidc plugin must hand
-    # the token payload through as a header, ie:
-    # OIDCPassIDTokenAs payload
+ # Initializing the token from keys. For this to work the mod_auth_openidc plugin must hand
+ # the token payload through as a header, ie:
+ # OIDCPassIDTokenAs payload
 
-    user_info = dict(keys)
-    print user_info
+ user_info = dict(keys)
+  print user_info
 
-    if "http.OIDC_CLAIM_groups" in user_info:
+   if "http.OIDC_CLAIM_groups" in user_info:
         user_info["http.OIDC_CLAIM_groups"] = user_info["http.OIDC_CLAIM_groups"].split(
             ",")
-        #user_info["http.OIDC_CLAIM_groups"] = [unicode(i, "utf-8") for i in user_info["http.OIDC_CLAIM_groups"]]
 
     result = myauthjson.auth_info_for_path(resource)
     if result is None:
@@ -168,13 +167,8 @@ def isallowed(clientname="unknown", remoteaddr="nowhere", resource="none", mode=
     # if we haven't matched on IP or via token attributes then don't let them in >:(
     return 1
 
-
 # ------------------------------
 if __name__ == "__main__":
     r = isallowed(sys.argv[1], sys.argv[2], sys.argv[3],
                   sys.argv[4], sys.argv[5:])
-<<<<<<< HEAD
     sys.exit(r)
-=======
-    sys.exit(r)
->>>>>>> 950946d... Fixes
