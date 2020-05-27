@@ -84,15 +84,24 @@ def process_condition(condition, user_info):
         return True
 
     if "attribute" in condition:
+<<<<<<< HEAD
         encoded_condition = {"attribute": condition["attribute"].encode(
             "utf-8"), "value": condition["value"].encode("utf-8")}
+=======
+        encoded_condition = { "attribute": condition["attribute"].encode("utf-8"), "value": condition["value"].encode("utf-8")}
+>>>>>>> 3fa53a53b5093b1411979c14ef6d4a34221a5ec1
         # only one attribute to check
 
         if user_info is None or encoded_condition["attribute"] not in user_info or (user_info[encoded_condition["attribute"]] != encoded_condition["value"] and encoded_condition["value"] not in user_info[encoded_condition["attribute"]]):
             return False
         else:
+<<<<<<< HEAD
             return True
 
+=======
+            return True 
+    
+>>>>>>> 3fa53a53b5093b1411979c14ef6d4a34221a5ec1
     if "or" in condition:
         # need to match one of anything in the list, so moment we match something
         # return true, if we finish without matching nothing matched so return
@@ -119,6 +128,7 @@ def process_condition(condition, user_info):
 # The main function that has to be invoked from ugr to determine if a request
 # has to be performed or not
 def isallowed(clientname="unknown", remoteaddr="nowhere", resource="none", mode="0", fqans=None, keys=None):
+<<<<<<< HEAD
 
     # Initializing the token from keys. For this to work the mod_auth_openidc plugin must hand
     # the token payload through as a header, ie:
@@ -132,6 +142,19 @@ def isallowed(clientname="unknown", remoteaddr="nowhere", resource="none", mode=
             ",")
         #user_info["http.OIDC_CLAIM_groups"] = [unicode(i, "utf-8") for i in user_info["http.OIDC_CLAIM_groups"]]
 
+=======
+ 
+    # Initializing the token from keys. For this to work the mod_auth_openidc plugin must hand
+    # the token payload through as a header, ie:
+    # OIDCPassIDTokenAs payload
+    
+    user_info =dict(keys)
+    
+    if "http.OIDC_CLAIM_groups" in user_info:
+	user_info["http.OIDC_CLAIM_groups"] = user_info["http.OIDC_CLAIM_groups"].split(",")
+	#user_info["http.OIDC_CLAIM_groups"] = [unicode(i, "utf-8") for i in user_info["http.OIDC_CLAIM_groups"]]
+ 
+>>>>>>> 3fa53a53b5093b1411979c14ef6d4a34221a5ec1
     result = myauthjson.auth_info_for_path(resource)
     if result is None:
         # failed to match anything, means the path isn't supposed protected by this plugin
@@ -171,6 +194,11 @@ def isallowed(clientname="unknown", remoteaddr="nowhere", resource="none", mode=
 
 # ------------------------------
 if __name__ == "__main__":
+<<<<<<< HEAD
     r = isallowed(sys.argv[1], sys.argv[2], sys.argv[3],
                   sys.argv[4], sys.argv[5:])
     sys.exit(r)
+=======
+    r = isallowed(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5:])
+    sys.exit(r)
+>>>>>>> 3fa53a53b5093b1411979c14ef6d4a34221a5ec1
