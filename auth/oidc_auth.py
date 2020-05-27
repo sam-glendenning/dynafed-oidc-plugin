@@ -1,14 +1,14 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-# A DynaFed plugin which contacts an OpenID Connect identity provider 
+# A DynaFed plugin which contacts an OpenID Connect identity provider
 # and then compares token attributes with a JSON file in order to
 # determine whether a user with certain attributes can access a
 # resource
 #
 # This is modified from dynafed-ldap-plugin, written by Louise Davies
 # and available at: https://github.com/stfc/dynafed-ldap-plugin
-# 
+#
 # usage:
 # oidc_auth.py <clientname> <remoteaddr> <fqan1> .. <fqanN>
 #
@@ -19,9 +19,7 @@
 
 import sys
 import json
-import jwt
 import time
-from cachetools import TTLCache
 
 
 # use this to strip trailing slashes so that we don't trip up any equalities due to them
@@ -31,20 +29,22 @@ def strip_end(string, suffix):
     else:
         return string
 
-
 # a class that loads the JSON configution file that details the authorisation info for paths
 # this is called during the initialisation of the module
+
+
 class _AuthJSON(object):
     auth_dict = {}
     path_list = []
 
     def __init__(self):
-        with open("/etc/grid-security/oidc_auth.json", "r") as f:
+        with open("/etc/ugr/conf.d/oidc_auth.json", "r") as f:
             self.auth_dict = json.load(f)
             prefix = self.auth_dict["prefix"]
             # prepopulate path list so we don't repeatedly parse it
             for endpoint in self.auth_dict["endpoints"]:
-                self.path_list.append(strip_end(strip_end(prefix, "/") + endpoint["endpoint_path"], "/"))
+                self.path_list.append(
+                    strip_end(strip_end(prefix, "/") + endpoint["endpoint_path"], "/"))
 
     # we want to apply the auth that matches the path most closely,
     # so we have to search the dict for path prefixes that match
@@ -75,18 +75,24 @@ class _AuthJSON(object):
 # Initialize a global instance of the authlist class, to be used inside the isallowed() function
 myauthjson = _AuthJSON()
 
+
 # given a authorisation condition and the user info, does the user satisfy the condition?
 # return true or false based on condition
 def process_condition(condition, user_info):
     # empty list = don't check any attributes, so auto match
     if len(condition) == 0:
         return True
+
     if "attribute" in condition:
+        encoded_condition = {"attribute": condition["attribute"].encode(
+            "utf-8"), "value": condition["value"].encode("utf-8")}
         # only one attribute to check
-        if user_info is None or condition["attribute"] not in user_info or user_info[condition["attribute"]] != condition["value"]:
+
+        if user_info is None or encoded_condition["attribute"] not in user_info or (user_info[encoded_condition["attribute"]] != encoded_condition["value"] and encoded_condition["value"] not in user_info[encoded_condition["attribute"]]):
             return False
         else:
             return True
+
     if "or" in condition:
         # need to match one of anything in the list, so moment we match something
         # return true, if we finish without matching nothing matched so return
@@ -113,12 +119,19 @@ def process_condition(condition, user_info):
 # The main function that has to be invoked from ugr to determine if a request
 # has to be performed or not
 def isallowed(clientname="unknown", remoteaddr="nowhere", resource="none", mode="0", fqans=None, keys=None):
-    
+
     # Initializing the token from keys. For this to work the mod_auth_openidc plugin must hand
     # the token payload through as a header, ie:
     # OIDCPassIDTokenAs payload
-    user_info = keys["OIDC_id_token_payload"]
-    
+
+    user_info = dict(keys)
+    print user_info
+
+    if "http.OIDC_CLAIM_groups" in user_info:
+        user_info["http.OIDC_CLAIM_groups"] = user_info["http.OIDC_CLAIM_groups"].split(
+            ",")
+        #user_info["http.OIDC_CLAIM_groups"] = [unicode(i, "utf-8") for i in user_info["http.OIDC_CLAIM_groups"]]
+
     result = myauthjson.auth_info_for_path(resource)
     if result is None:
         # failed to match anything, means the path isn't supposed protected by this plugin
@@ -158,5 +171,6 @@ def isallowed(clientname="unknown", remoteaddr="nowhere", resource="none", mode=
 
 # ------------------------------
 if __name__ == "__main__":
-    r = isallowed(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5:])
+    r = isallowed(sys.argv[1], sys.argv[2], sys.argv[3],
+                  sys.argv[4], sys.argv[5:])
     sys.exit(r)
