@@ -38,13 +38,18 @@ class _AuthJSON(object):
     path_list = []
 
     def __init__(self):
-        with open("/etc/ugr/conf.d/oidc_auth.json", "r") as f:
+        with open("/etc/ugr/conf.d/oidc_authtest.json", "r") as f:
             self.auth_dict = json.load(f)
             prefix = self.auth_dict["prefix"]
+            self.path_list.append(prefix)
             # prepopulate path list so we don't repeatedly parse it
-            for endpoint in self.auth_dict["endpoints"]:
-                self.path_list.append(
-                    strip_end(strip_end(prefix, "/") + endpoint["endpoint_path"], "/"))
+            for group in self.auth_dict["groups"]:
+                group_name = group["name"]
+                self.path_list.append(prefix + "/" + group_name)
+                
+                for bucket in group["buckets"]:
+                    bucket_name = bucket["name"]
+                    self.path_list.append(prefix + "/" + group_name + "/" + bucket_name)
 
     # we want to apply the auth that matches the path most closely,
     # so we have to search the dict for path prefixes that match
@@ -56,6 +61,7 @@ class _AuthJSON(object):
         split_path = stripped_path.split("/")
         prefix = self.auth_dict["prefix"]
         i = 0
+
         while i < len(split_path):
             p = ""
             if i == 0:
@@ -66,11 +72,15 @@ class _AuthJSON(object):
                 p = "/".join(split_path[:-i])
 
             if p in self.path_list:
-                for endpoint in self.auth_dict["endpoints"]:
-                    if strip_end(strip_end(prefix, "/") + endpoint["endpoint_path"], "/") == p:
-                        return {"path": p, "auth_info": endpoint}
+                if p == prefix:
+                    return {"path": p, "auth_info": self.auth_dict["base_info"][0]}
+                for group in self.auth_dict["groups"]:
+                    if prefix + "/" + group["name"] == p:       # if the user is navigating to /gridpp/group-name
+                        return {"path": p, "auth_info": group}
+                    for bucket in group["buckets"]:
+                        if prefix + "/" + group["name"] + "/" + bucket["name"] == p:      # if the user is navigating to a bucket inside a group (/gridpp/group-name/bucket-name)
+                            return {"path": p, "auth_info": bucket}
             i += 1
-
 
 # Initialize a global instance of the authlist class, to be used inside the isallowed() function
 myauthjson = _AuthJSON()
@@ -125,7 +135,6 @@ def isallowed(clientname="unknown", remoteaddr="nowhere", resource="none", mode=
     # OIDCPassIDTokenAs payload
 
     user_info = dict(keys)
-    print user_info
 
     if "http.OIDC_CLAIM_groups" in user_info:
         user_info["http.OIDC_CLAIM_groups"] = user_info["http.OIDC_CLAIM_groups"].split(
@@ -151,10 +160,6 @@ def isallowed(clientname="unknown", remoteaddr="nowhere", resource="none", mode=
         # without defaulting so that the entire federation is readable
         # might be useful elsewhere too
         return 1
-
-    for ip in auth_info["allowed_ip_addresses"]:
-        if ip["ip"] == remoteaddr and mode in ip["permissions"]:
-            return 0
 
     for item in auth_info["allowed_attributes"]:
         # use process_condition to check whether we match or not
