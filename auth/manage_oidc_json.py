@@ -536,6 +536,12 @@ def remove_bucket(args):
         print("Config file not valid, please use the verify function to debug")
         return 1
 
+    if remove_bucket_from_config(args) != 0 or remove_bucket_from_config_file(args) != 0:
+        print("Error while removing config for {}. Check {} is missing bucket and {}.conf is missing bucket config info to ensure full removal.".format(args.bucket, args.file, args.group))
+        return 1
+    return 0
+
+def remove_bucket_from_config(args):
     with open(args.file, "r") as f:
         config_json = json.load(f)
 
@@ -545,14 +551,34 @@ def remove_bucket(args):
                 if bucket["name"] == args.bucket:
                     config_json["groups"].remove(group)
                     group["buckets"].remove(bucket)
-                    config_json["groups"].append(group)
+                    if group["buckets"]:        # if no more buckets in group, delete that group
+                        config_json["groups"].append(group)
                     with open(args.file, "w") as f:
                         json.dump(config_json, f, indent=4)
                     return 0
             break
-
-    print("No bucket named {} to remove".format(args.bucket))
     return 1
+
+def remove_bucket_from_config_file(args):
+    expected_path = "/etc/ugr/conf.d/{}.conf".format(args.group)
+    if not os.path.exists(expected_path):
+        return 1
+
+    remaining_config = False
+
+    with open(expected_path, "r") as f:
+        lines = f.readlines()
+    with open(expected_path, "w") as f:
+        for line in lines:
+            if args.bucket not in line:
+                f.write(line)
+                if line and not line.isspace():            # Checking if the line is empty. This is my way of checking that there is other config for other buckets still in the group file
+                    remaining_config = True
+
+    # Checking if this was the last bucket in the group, should delete the group if this is the case
+    if not remaining_config:
+        os.remove(expected_path)
+    return 0
 
 def remove_group(args):
     # check config file is valid first
@@ -578,7 +604,6 @@ def remove_group_from_config(args):
             with open(args.file, "w") as f:
                 json.dump(config_json, f, indent=4)
             return 0
-    
     return 1
 
 def remove_group_config_file(args):
