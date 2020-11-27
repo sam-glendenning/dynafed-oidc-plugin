@@ -563,6 +563,12 @@ def remove_group(args):
         print("OIDC config file not valid, please use the verify function to debug")
         return 1 
 
+    if remove_group_from_config(args) != 0 or remove_group_config_file(args) != 0:
+        print("Error while removing config for {}. Check {} is missing group and {}.conf is missing to ensure full removal.".format(args.group, args.file, args.group))
+        return 1
+    return 0
+
+def remove_group_from_config(args):
     with open(args.file, "r") as f:
         config_json = json.load(f)
     
@@ -573,8 +579,14 @@ def remove_group(args):
                 json.dump(config_json, f, indent=4)
             return 0
     
-    print("No group named {} to remove".format(args.group))
     return 1
+
+def remove_group_config_file(args):
+    expected_path = "/etc/ugr/conf.d/{}.conf".format(args.group)
+    if not os.path.exists(expected_path):
+        return 1
+    os.remove(expected_path)
+    return 0
 
 
 

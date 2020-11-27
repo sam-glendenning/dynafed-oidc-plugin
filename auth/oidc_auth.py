@@ -57,6 +57,7 @@ class _AuthJSON(object):
     # aka we propogate permissions down unless the user has specified
     # different permissions for a child directory
     def auth_info_for_path(self, path):
+        self.__init__()
         stripped_path = strip_end(path, "/")
         split_path = stripped_path.split("/")
         prefix = self.auth_dict["prefix"]
