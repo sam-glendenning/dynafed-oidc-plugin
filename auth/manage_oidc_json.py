@@ -27,7 +27,7 @@ except NameError:
 
 
 def verify(args):
-    if args.surpress_verify_output:
+    if args.suppress_verify_output:
         sys.stdout = open(os.devnull, "w")
 
     try:
@@ -173,7 +173,7 @@ def check_valid_attribute_condition(attribute_condition, attr_index, bucket_inde
     return 0
 
 def get_groups(args):
-    args.surpress_verify_output = True
+    args.suppress_verify_output = True
     if verify(args) != 0:
         # restore stdout
         sys.stdout = sys.__stdout__
@@ -189,7 +189,7 @@ def get_groups(args):
     return groups
 
 def get_buckets(args):
-    args.surpress_verify_output = True
+    args.suppress_verify_output = True
     if verify(args) != 0:
         # restore stdout
         sys.stdout = sys.__stdout__
@@ -210,7 +210,7 @@ def list_groups(args):
         print(group)
 
 def list_buckets(args):
-    args.surpress_verify_output = True
+    args.suppress_verify_output = True
     if verify(args) != 0:
         # restore stdout
         sys.stdout = sys.__stdout__
@@ -227,8 +227,45 @@ def list_buckets(args):
             print("\t" + bucket["name"])
     return groups
 
+def does_group_exist(args):
+    args.suppress_verify_output = True
+    if verify(args) != 0:
+        # restore stdout
+        sys.stdout = sys.__stdout__
+        print("Config file not valid, please use the verify function to debug")
+        return 1
+
+    with open(args.file, "r") as f:
+        config_json = json.load(f)
+
+    for group in config_json["groups"]:
+        if group["name"] == args.group:
+            return 0
+    
+    return 1
+
+def does_bucket_exist(args):
+    args.suppress_verify_output = True
+    if verify(args) != 0:
+        # restore stdout
+        sys.stdout = sys.__stdout__
+        print("Config file not valid, please use the verify function to debug")
+        return 1
+
+    with open(args.file, "r") as f:
+        config_json = json.load(f)
+
+    for group in config_json["groups"]:
+        if group["name"] == args.group:
+            for bucket in group["buckets"]:
+                if bucket["name"] == args.bucket:
+                    return 0
+            break
+
+    return 1
+
 def group_info(args):
-    args.surpress_verify_output = True
+    args.suppress_verify_output = True
     if verify(args) != 0:
         # restore stdout
         sys.stdout = sys.__stdout__
@@ -242,13 +279,12 @@ def group_info(args):
         if group["name"] == args.group:
             print(json.dumps(group, indent=4))
             return 0
-            break
 
     print("No group matching {} found".format(args.group))
     return 1
 
 def bucket_info(args):
-    args.surpress_verify_output = True
+    args.suppress_verify_output = True
     if verify(args) != 0:
         # restore stdout
         sys.stdout = sys.__stdout__
@@ -270,7 +306,7 @@ def bucket_info(args):
     return 1
 
 def prefix(args):
-    args.surpress_verify_output = True
+    args.suppress_verify_output = True
     if verify(args) != 0:
         # restore stdout
         sys.stdout = sys.__stdout__
@@ -330,16 +366,6 @@ def create_bucket_config(args):
     with open("/etc/ugr/conf.d/" + args.group + ".conf", "a") as f:
         f.writelines(bucket_config)
 
-def does_group_exist(args):
-    with open(args.file, "r") as f:
-        config = json.load(f)
-
-    groups = config["groups"]
-    for group in groups:
-        if group["name"] == args.group:
-            return True
-    return False
-
 def add_group_to_config(args):
     new_group = {
         "name": args.group,
@@ -361,7 +387,11 @@ def add_group_to_config(args):
         json.dump(config, f, indent=4)
 
 def add_bucket_to_config(args):
-    if not does_group_exist(args):
+    if does_bucket_exist(args) == 0:
+        print("Bucket already exists, use update_bucket_permissions if you want to update it.")
+        return 1
+
+    if does_group_exist(args) != 0:
         add_group_to_config(args)
 
     new_bucket = {
@@ -390,15 +420,15 @@ def add_bucket_to_config(args):
     if not args.write_groups:
         args.write_groups = [args.group]
 
+    if args.group not in args.write_groups:
+        args.write_groups.append(args.group)
+
     write_groups_config = {
         "attribute_requirements": {
             "or": [],
         },
         "permissions": "rlwdc"
     }
-
-    if args.group not in args.write_groups:
-        args.write_groups.append(args.group)
 
     for write_group in args.write_groups:
         attribute = {
@@ -424,9 +454,11 @@ def add_bucket_to_config(args):
     with open(args.file, "w") as f:
         json.dump(config, f, indent=4)
 
+    return 0
+
 def import_bucket(args):
     # check config file is valid first
-    args.surpress_verify_output = True
+    args.suppress_verify_output = True
     if verify(args) != 0:
         # restore stdout
         sys.stdout = sys.__stdout__
@@ -441,7 +473,7 @@ def import_bucket(args):
     return 0
 
 def remove_bucket(args):
-    args.surpress_verify_output = True
+    args.suppress_verify_output = True
     if verify(args) != 0:
         # restore stdout
         sys.stdout = sys.__stdout__
@@ -501,7 +533,7 @@ def remove_bucket_from_config_file(args):
 
 def remove_group(args):
     # check config file is valid first
-    args.surpress_verify_output = True
+    args.suppress_verify_output = True
     if verify(args) != 0:
         # restore stdout
         sys.stdout = sys.__stdout__
@@ -539,6 +571,18 @@ def remove_group_config_file(args):
     os.remove(expected_path)
     return 0
 
+def update_bucket_permissions(args):
+    if does_bucket_exist(args) != 0:
+        print("No bucket matching {} found".format(args.bucket))
+        return 1
+
+    result_remove = remove_bucket_from_config(args)
+    result_add = add_bucket_to_config(args)
+    if result_remove != 0 or result_add != 0:
+        print("An unknown error occurred. The bucket is likely misconfigured. Use the verify function to debug.")
+        return 1
+
+    return 0
 
 
 # top level argument parser
@@ -549,39 +593,41 @@ subparsers = parser.add_subparsers(title="subcommands", description="Functions t
 
 # parser for verify command
 parser_verify = subparsers.add_parser("verify", help="Verify that the JSON file is valid.")
-parser_verify.add_argument("-f, --file", type=str, dest="file", nargs='?', default=DEFAULT_AUTH_FILE_LOCATION, help="Location of the JSON configuration file to act on.")
-parser_verify.add_argument("--surpress-verify-output", action="store_true", help=argparse.SUPPRESS)  # hidden option to tell us to supress output
+parser_verify.add_argument("-f, --file", type=str, dest="file", nargs='?', default=DEFAULT_AUTH_FILE_LOCATION, help="Location of the JSON configuration file to act on")
+parser_verify.add_argument("--suppress-verify-output", action="store_true", help=argparse.SUPPRESS)  # hidden option to tell us to suppress output
 parser_verify.set_defaults(func=verify)
 
 # parser for list groups command
-parser_list = subparsers.add_parser("list_groups", help="List all groups in file")
-parser_list.add_argument("-f, --file", type=str, dest="file", nargs='?', default=DEFAULT_AUTH_FILE_LOCATION, help="Location of the JSON configuration file to act on.")
-parser_list.set_defaults(func=list_groups)
+parser_group_list = subparsers.add_parser("list_groups", help="List all groups in file")
+parser_group_list.add_argument("-f, --file", type=str, dest="file", nargs='?', default=DEFAULT_AUTH_FILE_LOCATION, help="Location of the JSON configuration file to act on")
+parser_group_list.set_defaults(func=list_groups)
 
 # parser for list buckets command
-parser_list = subparsers.add_parser("list_buckets", help="List all buckets in file")
-parser_list.add_argument("-f, --file", type=str, dest="file", nargs='?', default=DEFAULT_AUTH_FILE_LOCATION, help="Location of the JSON configuration file to act on.")
-parser_list.set_defaults(func=list_buckets)
+parser_bucket_list = subparsers.add_parser("list_buckets", help="List all buckets in file")
+parser_bucket_list.add_argument("-f, --file", type=str, dest="file", nargs='?', default=DEFAULT_AUTH_FILE_LOCATION, help="Location of the JSON configuration file to act on")
+parser_bucket_list.set_defaults(func=list_buckets)
 
 # parser for group info command
-parser_info = subparsers.add_parser("group_info", help="Get the configuration information for a group")
-parser_info.add_argument("-g, --group", type=str, required=True, dest="group", help="Group to get info on")
-parser_info.add_argument("-f, --file", type=str, dest="file", nargs='?', default=DEFAULT_AUTH_FILE_LOCATION, help="Location of the JSON configuration file to act on.")
-parser_info.set_defaults(func=group_info)
+parser_group_info = subparsers.add_parser("group_info", help="Get the configuration information for a group")
+requiredNamed = parser_group_info.add_argument_group('required named arguments')
+requiredNamed.add_argument("-g, --group", type=str, required=True, dest="group", help="Group to get info on")
+parser_group_info.add_argument("-f, --file", type=str, dest="file", nargs='?', default=DEFAULT_AUTH_FILE_LOCATION, help="Location of the JSON configuration file to act on")
+parser_group_info.set_defaults(func=group_info)
 
 # parser for bucket info command
-parser_info = subparsers.add_parser("bucket_info", help="Get the configuration information for a bucket")
-parser_info.add_argument("-g, --group", type=str, required=True, dest="group", help="Group the bucket belongs to")
-parser_info.add_argument("-b, --bucket", type=str, required=True, dest="bucket", help="Bucket to get info on")
-parser_info.add_argument("-f, --file", type=str, dest="file", nargs='?', default=DEFAULT_AUTH_FILE_LOCATION, help="Location of the JSON configuration file to act on.")
-parser_info.set_defaults(func=bucket_info)
+parser_bucket_info = subparsers.add_parser("bucket_info", help="Get the configuration information for a bucket")
+requiredNamed = parser_bucket_info.add_argument_group('required named arguments')
+requiredNamed.add_argument("-g, --group", type=str, required=True, dest="group", help="Group the bucket belongs to")
+requiredNamed.add_argument("-b, --bucket", type=str, required=True, dest="bucket", help="Bucket to get info on")
+parser_bucket_info.add_argument("-f, --file", type=str, dest="file", nargs='?', default=DEFAULT_AUTH_FILE_LOCATION, help="Location of the JSON configuration file to act on")
+parser_bucket_info.set_defaults(func=bucket_info)
 
 # parser for import_bucket command
-parser_import_bucket = subparsers.add_parser("import_bucket", help="Import an S3 bucket by generating the config file for DynaFed")
+parser_import_bucket = subparsers.add_parser("import_bucket", help="Import an S3 bucket by generating the config file for DynaFed and updating the auth file")
 requiredNamed = parser_import_bucket.add_argument_group('required named arguments')
 requiredNamed.add_argument("-g, --group", type=str, required=True, dest="group", help="Name of the IAM group to associate this bucket with.")
 requiredNamed.add_argument("-b, --bucket", type=str, required=True, dest="bucket", help="Name of the S3 bucket you would like to import.")
-requiredNamed.add_argument("-f, --file", type=str, dest="file", nargs='?', default=DEFAULT_AUTH_FILE_LOCATION, help="Location of the JSON configuration file to act on.")
+requiredNamed.add_argument("-f, --file", type=str, dest="file", nargs='?', default=DEFAULT_AUTH_FILE_LOCATION, help="Location of the JSON configuration file to act on")
 requiredNamed.add_argument("--public-key", type=str, required=True, dest="public_key", help="AWS access key")
 requiredNamed.add_argument("--private-key", type=str, required=True, dest="private_key", help="AWS secret key")
 parser_import_bucket.add_argument("--read-groups", dest="read_groups", nargs="+", help="Supply names of groups who should have read and list permissions")
@@ -590,22 +636,35 @@ parser_import_bucket.set_defaults(func=import_bucket)
 
 # parser for remove_bucket command
 parser_remove_bucket = subparsers.add_parser("remove_bucket", help="Remove a bucket from the authorisation file")
-parser_remove_bucket.add_argument("-f, --file", type=str, dest="file", nargs='?', default=DEFAULT_AUTH_FILE_LOCATION, help="Location of the JSON configuration file to act on.")
-parser_remove_bucket.add_argument("-g, --group", type=str, required=True, dest="group", help="Group the bucket belongs to")
-parser_remove_bucket.add_argument("-b, --bucket", type=str, required=True, dest="bucket", help="Bucket to remove from authorisation file")
+requiredNamed = parser_remove_bucket.add_argument_group('required named arguments')
+requiredNamed.add_argument("-g, --group", type=str, required=True, dest="group", help="Group the bucket belongs to")
+requiredNamed.add_argument("-b, --bucket", type=str, required=True, dest="bucket", help="Bucket to remove")
+parser_remove_bucket.add_argument("-f, --file", type=str, dest="file", nargs='?', default=DEFAULT_AUTH_FILE_LOCATION, help="Location of the JSON configuration file to act on")
 parser_remove_bucket.set_defaults(func=remove_bucket)
 
 # parser for remove_group command
 parser_remove_group = subparsers.add_parser("remove_group", help="Remove a group and all of its buckets from the authorisation file")
-parser_remove_group.add_argument("-f, --file", type=str, dest="file", nargs='?', default=DEFAULT_AUTH_FILE_LOCATION, help="Location of the JSON configuration file to act on.")
-parser_remove_group.add_argument("-g, --group", type=str, required=True, dest="group", help="Group to remove")
+requiredNamed = parser_remove_group.add_argument_group('required named arguments')
+requiredNamed.add_argument("-g, --group", type=str, required=True, dest="group", help="Group to remove")
+parser_remove_group.add_argument("-f, --file", type=str, dest="file", nargs='?', default=DEFAULT_AUTH_FILE_LOCATION, help="Location of the JSON configuration file to act on")
 parser_remove_group.set_defaults(func=remove_group)
 
 # parser for prefix command
 parser_prefix = subparsers.add_parser("prefix", help="Get the federation prefix for DynaFed or provide a new prefix. This will be prepended to all endpoints")
-parser_prefix.add_argument("-f, --file", type=str, dest="file", nargs='?', default=DEFAULT_AUTH_FILE_LOCATION, help="Location of the JSON configuration file to act on.")
+parser_prefix.add_argument("-f, --file", type=str, dest="file", nargs='?', default=DEFAULT_AUTH_FILE_LOCATION, help="Location of the JSON configuration file to act on")
 parser_prefix.add_argument("-p, --prefix", nargs="?", dest="prefix", help="Supply a prefix to set the federation prefix in the configuration")
 parser_prefix.set_defaults(func=prefix)
+
+# parser for update_bucket_permissions command
+parser_update_bucket_permissions = subparsers.add_parser("update_bucket_permissions", help="Update the groups who have read and write access to a given bucket. If no groups are specified, only the owning group will have read/write access.")
+requiredNamed = parser_update_bucket_permissions.add_argument_group("required named arguments")
+requiredNamed.add_argument("-g, --group", type=str, required=True, dest="group", help="Group the bucket belongs to")
+requiredNamed.add_argument("-b, --bucket", type=str, required=True, dest="bucket", help="Bucket to update")
+parser_update_bucket_permissions.add_argument("-f, --file", type=str, dest="file", nargs='?', default=DEFAULT_AUTH_FILE_LOCATION, help="Location of the JSON configuration file to act on")
+parser_update_bucket_permissions.add_argument("--read-groups", dest="read_groups", nargs="+", help="Supply names of groups who should have read and list permissions")
+parser_update_bucket_permissions.add_argument("--write-groups", dest="write_groups", nargs="+", help="Supply names of groups who should have read, list, write, delete and create permissions")
+parser_update_bucket_permissions.set_defaults(func=update_bucket_permissions)
+
 
 if __name__ == "__main__":
     if len(sys.argv) == 1:
