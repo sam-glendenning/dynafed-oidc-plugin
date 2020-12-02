@@ -21,6 +21,7 @@ import sys
 import json
 import time
 
+DEFAULT_AUTH_FILE_LOCATION = "/etc/grid-security/oidc_auth.json"
 
 # use this to strip trailing slashes so that we don't trip up any equalities due to them
 def strip_end(string, suffix):
@@ -38,7 +39,7 @@ class _AuthJSON(object):
     path_list = []
 
     def __init__(self):
-        with open("/etc/ugr/conf.d/oidc_authtest.json", "r") as f:
+        with open(DEFAULT_AUTH_FILE_LOCATION, "r") as f:
             self.auth_dict = json.load(f)
             prefix = self.auth_dict["prefix"]
             self.path_list.append(prefix)
@@ -57,7 +58,6 @@ class _AuthJSON(object):
     # aka we propogate permissions down unless the user has specified
     # different permissions for a child directory
     def auth_info_for_path(self, path):
-        self.__init__()
         stripped_path = strip_end(path, "/")
         split_path = stripped_path.split("/")
         prefix = self.auth_dict["prefix"]
@@ -82,9 +82,6 @@ class _AuthJSON(object):
                         if prefix + "/" + group["name"] + "/" + bucket["name"] == p:      # if the user is navigating to a bucket inside a group (/gridpp/group-name/bucket-name)
                             return {"path": p, "auth_info": bucket}
             i += 1
-
-# Initialize a global instance of the authlist class, to be used inside the isallowed() function
-myauthjson = _AuthJSON()
 
 
 # given a authorisation condition and the user info, does the user satisfy the condition?
@@ -142,6 +139,7 @@ def isallowed(clientname="unknown", remoteaddr="nowhere", resource="none", mode=
             ",")
         #user_info["http.OIDC_CLAIM_groups"] = [unicode(i, "utf-8") for i in user_info["http.OIDC_CLAIM_groups"]]
 
+    myauthjson = _AuthJSON()
     result = myauthjson.auth_info_for_path(resource)
     if result is None:
         # failed to match anything, means the path isn't supposed protected by this plugin

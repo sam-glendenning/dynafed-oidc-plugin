@@ -6,6 +6,8 @@ import os
 import socket
 import boto3
 from botocore.exceptions import ClientError
+from oidc_auth import DEFAULT_AUTH_FILE_LOCATION
+
 
 # needed for python 2 and 3 compabilility to check str types
 try:
@@ -124,6 +126,52 @@ def verify(args):
         print("Invalid JSON") 
         return 1
 
+def check_valid_attribute_condition(attribute_condition, attr_index, bucket_index):
+    if not isinstance(attribute_condition, dict):
+        print("Atrribute conditions should be dicts, in attribute_requirements list index " +
+              str(attr_index) + " endpoint list index " + str(bucket_index))
+        return 1
+
+    # empty is valid - means no attributes are required to match
+    if len(attribute_condition) == 0:
+        return 0
+
+    if (("attribute" in attribute_condition and "value" not in attribute_condition) or
+       ("value" in attribute_condition and "attribute" not in attribute_condition)):
+        print("Atrribute specifications should specify both an attribute name and a value" +
+              ", in attribute_requirements list index " + str(attr_index) +
+              " endpoint list index " + str(bucket_index))
+        return 1
+
+    if "attribute" in attribute_condition and not isinstance(attribute_condition["attribute"], basestring):
+        print("attribute should be a string, attribute_requirements list index " +
+              str(attr_index) + " endpoint list index " + str(bucket_index))
+        return 1
+
+    if (("attribute" not in attribute_condition and
+         "or" not in attribute_condition and
+         "and" not in attribute_condition)):
+        print("Atrribute conditions should either be an attribute-value pair, " +
+              "or an 'or' condition list or an 'and' condition list" +
+              ", in attribute_requirements list index " + str(attr_index) +
+              " endpoint list index " + str(bucket_index))
+        return 1
+
+    operator = "or" if "or" in attribute_condition else ""
+    operator = "and" if "and" in attribute_condition else operator
+
+    if (operator in attribute_condition and not isinstance(attribute_condition[operator], list)):
+        print("OR or AND atrribute conditions should contain a list (of attribute conditions)" +
+              ", item in attribute_requirements list index " + str(attr_index) +
+              " endpoint list index " + str(bucket_index) + " is not a list")
+        return 1
+
+    if (operator in attribute_condition):
+        for sub_attribute_condition in attribute_condition[operator]:
+            check_valid_attribute_condition(sub_attribute_condition, attr_index, bucket_index)
+
+    return 0
+
 def get_groups(args):
     args.surpress_verify_output = True
     if verify(args) != 0:
@@ -179,52 +227,6 @@ def list_buckets(args):
             print("\t" + bucket["name"])
     return groups
 
-def check_valid_attribute_condition(attribute_condition, attr_index, bucket_index):
-    if not isinstance(attribute_condition, dict):
-        print("Atrribute conditions should be dicts, in attribute_requirements list index " +
-              str(attr_index) + " endpoint list index " + str(bucket_index))
-        return 1
-
-    # empty is valid - means no attributes are required to match
-    if len(attribute_condition) == 0:
-        return 0
-
-    if (("attribute" in attribute_condition and "value" not in attribute_condition) or
-       ("value" in attribute_condition and "attribute" not in attribute_condition)):
-        print("Atrribute specifications should specify both an attribute name and a value" +
-              ", in attribute_requirements list index " + str(attr_index) +
-              " endpoint list index " + str(bucket_index))
-        return 1
-
-    if "attribute" in attribute_condition and not isinstance(attribute_condition["attribute"], basestring):
-        print("attribute should be a string, attribute_requirements list index " +
-              str(attr_index) + " endpoint list index " + str(bucket_index))
-        return 1
-
-    if (("attribute" not in attribute_condition and
-         "or" not in attribute_condition and
-         "and" not in attribute_condition)):
-        print("Atrribute conditions should either be an attribute-value pair, " +
-              "or an 'or' condition list or an 'and' condition list" +
-              ", in attribute_requirements list index " + str(attr_index) +
-              " endpoint list index " + str(bucket_index))
-        return 1
-
-    operator = "or" if "or" in attribute_condition else ""
-    operator = "and" if "and" in attribute_condition else operator
-
-    if (operator in attribute_condition and not isinstance(attribute_condition[operator], list)):
-        print("OR or AND atrribute conditions should contain a list (of attribute conditions)" +
-              ", item in attribute_requirements list index " + str(attr_index) +
-              " endpoint list index " + str(bucket_index) + " is not a list")
-        return 1
-
-    if (operator in attribute_condition):
-        for sub_attribute_condition in attribute_condition[operator]:
-            check_valid_attribute_condition(sub_attribute_condition, attr_index, bucket_index)
-
-    return 0
-
 def group_info(args):
     args.surpress_verify_output = True
     if verify(args) != 0:
@@ -266,101 +268,6 @@ def bucket_info(args):
 
     print("No bucket matching {} found".format(args.bucket))
     return 1
-
-def prompt_bool(message):
-    while True:
-        prompt = input(message).lower()
-        true_values = {"t", "true", "y", "yes", "ok"}
-        false_values = {"f", "false", "n", "no"}
-        if prompt in true_values:
-            return True
-        elif prompt in false_values:
-            return False
-        else:
-            print("Invalid input, please enter a yes or no response")
-
-def prompt_permissions(message):
-    while True:
-        permissions = input(message).lower()
-        modes = "rlwdc"
-        if set(permissions) <= set(modes):
-            break
-        else:
-            print("You entered a character that wasn't r, l, w, d or c, please retry")
-
-    # clean up permission string, make sure no duplicates and sort it in order of rlwdc
-    clean_permissions = ""
-    if "r" in permissions:
-        clean_permissions = "r"
-    if "l" in permissions:
-        clean_permissions = clean_permissions + "l"
-    if "w" in permissions:
-        clean_permissions = clean_permissions + "w"
-    if "d" in permissions:
-        clean_permissions = clean_permissions + "d"
-    if "c" in permissions:
-        clean_permissions = clean_permissions + "c"
-
-    return clean_permissions
-
-def create_attribute_condition():
-    while True:
-        user_selection = input("\nWould you like to create an OR condition, AND condition or specify an attribute-value pair? Or would you like to stop adding attribute conditions? \n"
-                               "1) OR\n"
-                               "2) AND\n"
-                               "3) Attribute-value pair\n"
-                               "4) Exit\n")
-        if (user_selection == "1" or user_selection == "2" or
-                user_selection == "3"):
-            break
-        elif user_selection == "4":
-            return {}
-        else:
-            print("Please enter a number 1-4")
-
-    # OR condition
-    if user_selection == "1":
-        operation = "or"
-        condition = {
-            "or": []
-        }
-
-    # AND condition
-    if user_selection == "2":
-        operation = "and"
-        condition = {
-            "and": []
-        }
-
-    # Attribute-value pair
-    if user_selection == "3":
-        condition = {
-            "attribute": "http.OIDC_CLAIM_groups",
-            "value": ""
-        }
-
-        #value = input("Enter attribute value: ")
-        value = input("Enter group name: ")
-        condition["value"] = value
-
-        # we can't ask for more conditions, so return
-        return condition
-
-    # OR and AND conditions need to ask for sub conditions
-    if user_selection == "1" or "user_selection" == 2:
-        print("\n\nPlease add an attribute condition to this " + operation.upper() + " condition")
-
-        add_condition = True
-        while add_condition:
-            # recurse and prompt if they want to add another condition at this level
-            attribute_condition = create_attribute_condition()
-            # need to check for not {} i.e they selected exit
-            if attribute_condition:
-                condition[operation].append(attribute_condition)
-                add_condition = prompt_bool("Would you like to add another attribute condition to this " +
-                                            operation.upper() + " condition? (Y/n)")
-
-    return condition
 
 def prefix(args):
     args.surpress_verify_output = True
@@ -480,22 +387,27 @@ def add_bucket_to_config(args):
 
         new_bucket["allowed_attributes"].append(read_groups_config)
 
-    if args.write_groups:
-        write_groups_config = {
-            "attribute_requirements": {
-                "or": [],
-            },
-            "permissions": "rlwdc"
+    if not args.write_groups:
+        args.write_groups = [args.group]
+
+    write_groups_config = {
+        "attribute_requirements": {
+            "or": [],
+        },
+        "permissions": "rlwdc"
+    }
+
+    if args.group not in args.write_groups:
+        args.write_groups.append(args.group)
+
+    for write_group in args.write_groups:
+        attribute = {
+            "attribute": "http.OIDC_CLAIM_groups",
+            "value": write_group
         }
+        write_groups_config["attribute_requirements"]["or"].append(attribute)
 
-        for write_group in args.write_groups:
-            attribute = {
-                "attribute": "http.OIDC_CLAIM_groups",
-                "value": write_group
-            }
-            write_groups_config["attribute_requirements"]["or"].append(attribute)
-
-        new_bucket["allowed_attributes"].append(write_groups_config)
+    new_bucket["allowed_attributes"].append(write_groups_config)
 
     with open(args.file, "r") as f:
         config = json.load(f)
@@ -536,7 +448,14 @@ def remove_bucket(args):
         print("Config file not valid, please use the verify function to debug")
         return 1
 
-    if remove_bucket_from_config(args) != 0 or remove_bucket_from_config_file(args) != 0:
+    result_remove_from_auth_file = remove_bucket_from_config_file(args)
+    result_remove_from_config_file = remove_bucket_from_config(args)
+
+    if result_remove_from_auth_file != 0 and result_remove_from_config_file != 0:
+        print("Error. Bucket {} either does not exist or is not assigned to group {}".format(args.bucket, args.group))
+        return 1
+
+    if result_remove_from_auth_file != 0 or result_remove_from_config_file != 0:
         print("Error while removing config for {}. Check {} is missing bucket and {}.conf is missing bucket config info to ensure full removal.".format(args.bucket, args.file, args.group))
         return 1
     return 0
@@ -589,7 +508,14 @@ def remove_group(args):
         print("OIDC config file not valid, please use the verify function to debug")
         return 1 
 
-    if remove_group_from_config(args) != 0 or remove_group_config_file(args) != 0:
+    result_remove_config_file = remove_group_from_config(args)
+    result_remove_from_config = remove_group_config_file(args)
+
+    if result_remove_config_file != 0 and result_remove_from_config != 0:
+        print("Error. Group {} does not exist in DynaFed".format(args.group))
+        return 1
+
+    if result_remove_config_file != 0 or result_remove_from_config != 0:
         print("Error while removing config for {}. Check {} is missing group and {}.conf is missing to ensure full removal.".format(args.group, args.file, args.group))
         return 1
     return 0
@@ -623,39 +549,39 @@ subparsers = parser.add_subparsers(title="subcommands", description="Functions t
 
 # parser for verify command
 parser_verify = subparsers.add_parser("verify", help="Verify that the JSON file is valid.")
-parser_verify.add_argument("-f, --file", type=str, required=True, dest="file", help="Location of the JSON configuration file to act on.")
-parser_verify.add_argument("--surpress-verify-output", action="store_true", help=argparse.SUPPRESS)  # hidden option to tell us to surpress output
+parser_verify.add_argument("-f, --file", type=str, dest="file", nargs='?', default=DEFAULT_AUTH_FILE_LOCATION, help="Location of the JSON configuration file to act on.")
+parser_verify.add_argument("--surpress-verify-output", action="store_true", help=argparse.SUPPRESS)  # hidden option to tell us to supress output
 parser_verify.set_defaults(func=verify)
 
 # parser for list groups command
 parser_list = subparsers.add_parser("list_groups", help="List all groups in file")
-parser_list.add_argument("-f, --file", type=str, required=True, dest="file", help="Location of the JSON configuration file to act on.")
+parser_list.add_argument("-f, --file", type=str, dest="file", nargs='?', default=DEFAULT_AUTH_FILE_LOCATION, help="Location of the JSON configuration file to act on.")
 parser_list.set_defaults(func=list_groups)
 
 # parser for list buckets command
 parser_list = subparsers.add_parser("list_buckets", help="List all buckets in file")
-parser_list.add_argument("-f, --file", type=str, required=True, dest="file", help="Location of the JSON configuration file to act on.")
+parser_list.add_argument("-f, --file", type=str, dest="file", nargs='?', default=DEFAULT_AUTH_FILE_LOCATION, help="Location of the JSON configuration file to act on.")
 parser_list.set_defaults(func=list_buckets)
 
 # parser for group info command
 parser_info = subparsers.add_parser("group_info", help="Get the configuration information for a group")
-parser_info.add_argument("group", help="Group to get info on")
-parser_info.add_argument("-f, --file", type=str, required=True, dest="file", help="Location of the JSON configuration file to act on.")
+parser_info.add_argument("-g, --group", type=str, required=True, dest="group", help="Group to get info on")
+parser_info.add_argument("-f, --file", type=str, dest="file", nargs='?', default=DEFAULT_AUTH_FILE_LOCATION, help="Location of the JSON configuration file to act on.")
 parser_info.set_defaults(func=group_info)
 
 # parser for bucket info command
 parser_info = subparsers.add_parser("bucket_info", help="Get the configuration information for a bucket")
-parser_info.add_argument("group", help="Group the bucket belongs to")
-parser_info.add_argument("bucket", help="Bucket to get info on")
-parser_info.add_argument("-f, --file", type=str, required=True, dest="file", help="Location of the JSON configuration file to act on.")
+parser_info.add_argument("-g, --group", type=str, required=True, dest="group", help="Group the bucket belongs to")
+parser_info.add_argument("-b, --bucket", type=str, required=True, dest="bucket", help="Bucket to get info on")
+parser_info.add_argument("-f, --file", type=str, dest="file", nargs='?', default=DEFAULT_AUTH_FILE_LOCATION, help="Location of the JSON configuration file to act on.")
 parser_info.set_defaults(func=bucket_info)
 
 # parser for import_bucket command
 parser_import_bucket = subparsers.add_parser("import_bucket", help="Import an S3 bucket by generating the config file for DynaFed")
 requiredNamed = parser_import_bucket.add_argument_group('required named arguments')
-requiredNamed.add_argument("--group", type=str, required=True, dest="group", help="Name of the IAM group to associate this bucket with.")
-requiredNamed.add_argument("--bucket", type=str, required=True, dest="bucket", help="Name of the DynaFed bucket you would like to create.")
-requiredNamed.add_argument("--file", type=str, required=True, dest="file", help="Location of the JSON configuration file to act on.")
+requiredNamed.add_argument("-g, --group", type=str, required=True, dest="group", help="Name of the IAM group to associate this bucket with.")
+requiredNamed.add_argument("-b, --bucket", type=str, required=True, dest="bucket", help="Name of the S3 bucket you would like to import.")
+requiredNamed.add_argument("-f, --file", type=str, dest="file", nargs='?', default=DEFAULT_AUTH_FILE_LOCATION, help="Location of the JSON configuration file to act on.")
 requiredNamed.add_argument("--public-key", type=str, required=True, dest="public_key", help="AWS access key")
 requiredNamed.add_argument("--private-key", type=str, required=True, dest="private_key", help="AWS secret key")
 parser_import_bucket.add_argument("--read-groups", dest="read_groups", nargs="+", help="Supply names of groups who should have read and list permissions")
@@ -664,21 +590,21 @@ parser_import_bucket.set_defaults(func=import_bucket)
 
 # parser for remove_bucket command
 parser_remove_bucket = subparsers.add_parser("remove_bucket", help="Remove a bucket from the authorisation file")
-parser_remove_bucket.add_argument("-f, --file", type=str, required=True, dest="file", help="Location of the JSON configuration file to act on.")
-parser_remove_bucket.add_argument("group", help="Group the bucket belongs to")
-parser_remove_bucket.add_argument("bucket", help="Bucket to remove from authorisation file")
+parser_remove_bucket.add_argument("-f, --file", type=str, dest="file", nargs='?', default=DEFAULT_AUTH_FILE_LOCATION, help="Location of the JSON configuration file to act on.")
+parser_remove_bucket.add_argument("-g, --group", type=str, required=True, dest="group", help="Group the bucket belongs to")
+parser_remove_bucket.add_argument("-b, --bucket", type=str, required=True, dest="bucket", help="Bucket to remove from authorisation file")
 parser_remove_bucket.set_defaults(func=remove_bucket)
 
 # parser for remove_group command
 parser_remove_group = subparsers.add_parser("remove_group", help="Remove a group and all of its buckets from the authorisation file")
-parser_remove_group.add_argument("-f, --file", type=str, required=True, dest="file", help="Location of the JSON configuration file to act on.")
-parser_remove_group.add_argument("group", help="Group to remove")
+parser_remove_group.add_argument("-f, --file", type=str, dest="file", nargs='?', default=DEFAULT_AUTH_FILE_LOCATION, help="Location of the JSON configuration file to act on.")
+parser_remove_group.add_argument("-g, --group", type=str, required=True, dest="group", help="Group to remove")
 parser_remove_group.set_defaults(func=remove_group)
 
 # parser for prefix command
 parser_prefix = subparsers.add_parser("prefix", help="Get the federation prefix for DynaFed or provide a new prefix. This will be prepended to all endpoints")
-parser_prefix.add_argument("-f, --file", type=str, required=True, dest="file", help="Location of the JSON configuration file to act on.")
-parser_prefix.add_argument("prefix", nargs="?", help="Supply a prefix to set the federation prefix in the configuration")
+parser_prefix.add_argument("-f, --file", type=str, dest="file", nargs='?', default=DEFAULT_AUTH_FILE_LOCATION, help="Location of the JSON configuration file to act on.")
+parser_prefix.add_argument("-p, --prefix", nargs="?", dest="prefix", help="Supply a prefix to set the federation prefix in the configuration")
 parser_prefix.set_defaults(func=prefix)
 
 if __name__ == "__main__":
