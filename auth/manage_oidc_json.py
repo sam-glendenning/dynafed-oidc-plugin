@@ -336,7 +336,7 @@ def update_bucket_cors(args):
         "CORSRules": [
             {
                 "AllowedMethods": ["GET", "PUT"],
-                "AllowedOrigins": ["https://s3.echo.stfc.ac.uk"],
+                "AllowedOrigins": ["https://dynafed.stfc.ac.uk", "https://dynafed2.gridpp.rl.ac.uk", "https://dynafed-test.stfc.ac.uk", "https://dynafed-test2.gridpp.rl.ac.uk"],
                 "MaxAgeSeconds": 3000
             }
         ]
@@ -351,11 +351,13 @@ def update_bucket_cors(args):
     return 0
 
 def create_bucket_config(args):
-    full_bucket_name = args.group + "-" + args.bucket
+    sanitised_group = args.group.replace('/', '-')
+
+    full_bucket_name = sanitised_group + "-" + args.bucket
     bucket_config = [
         "# Plugin for " + args.bucket + " bucket\n",
         "glb.locplugin[]: /usr/lib64/ugr/libugrlocplugin_s3.so " + full_bucket_name + " 15 s3s://s3.echo.stfc.ac.uk/" + args.bucket + "\n",
-        "locplugin." + full_bucket_name + ".xlatepfx: /" + args.group + "/" + args.bucket + " /\n",
+        "locplugin." + full_bucket_name + ".xlatepfx: /" + sanitised_group + "/" + args.bucket + " /\n",
         "locplugin." + full_bucket_name + ".s3.priv_key: " + args.private_key + "\n",
         "locplugin." + full_bucket_name + ".s3.pub_key: " + args.public_key + "\n",
         "locplugin." + full_bucket_name + ".s3.writable: true\n",
@@ -363,12 +365,14 @@ def create_bucket_config(args):
         "locplugin." + full_bucket_name + ".s3.ca_path: /etc/grid-security/certificates/\n",
         "\n"
     ]
-    with open("/etc/ugr/conf.d/" + args.group + ".conf", "a") as f:
+
+    with open("/etc/ugr/conf.d/" + sanitised_group + ".conf", "a") as f:
         f.writelines(bucket_config)
 
 def add_group_to_config(args):
+    sanitised_group = args.group.replace('/', '-')
     new_group = {
-        "name": args.group,
+        "name": sanitised_group,
         "propogate_permissions": False,
         "allowed_attributes": [
 			{
@@ -417,11 +421,10 @@ def add_bucket_to_config(args):
 
         new_bucket["allowed_attributes"].append(read_groups_config)
 
-    if not args.write_groups:
-        args.write_groups = [args.group]
+    sanitised_group = args.group.replace('/', '-')
 
-    if args.group not in args.write_groups:
-        args.write_groups.append(args.group)
+    if not args.write_groups:
+        args.write_groups = [sanitised_group]
 
     write_groups_config = {
         "attribute_requirements": {
@@ -443,7 +446,7 @@ def add_bucket_to_config(args):
         config = json.load(f)
     
     for group in config["groups"]:
-        if group["name"] == args.group:
+        if group["name"] == sanitised_group:
             config["groups"].remove(group)
             bucket_list = group["buckets"]
             bucket_list.append(new_bucket)
@@ -553,11 +556,13 @@ def remove_group(args):
     return 0
 
 def remove_group_from_config(args):
+    sanitised_group = args.group.replace('/', '-')
+
     with open(args.file, "r") as f:
         config_json = json.load(f)
     
     for group in config_json["groups"]:
-        if group["name"] == args.group:
+        if group["name"] == sanitised_group:
             config_json["groups"].remove(group)
             with open(args.file, "w") as f:
                 json.dump(config_json, f, indent=4)
@@ -565,7 +570,8 @@ def remove_group_from_config(args):
     return 1
 
 def remove_group_config_file(args):
-    expected_path = "/etc/ugr/conf.d/{}.conf".format(args.group)
+    sanitised_group = args.group.replace('/', '-')
+    expected_path = "/etc/ugr/conf.d/{}.conf".format(sanitised_group)
     if not os.path.exists(expected_path):
         return 1
     os.remove(expected_path)
@@ -656,7 +662,7 @@ parser_prefix.add_argument("-p, --prefix", nargs="?", dest="prefix", help="Suppl
 parser_prefix.set_defaults(func=prefix)
 
 # parser for update_bucket_permissions command
-parser_update_bucket_permissions = subparsers.add_parser("update_bucket_permissions", help="Update the groups who have read and write access to a given bucket. If no groups are specified, only the owning group will have read/write access.")
+parser_update_bucket_permissions = subparsers.add_parser("update_bucket_permissions", help="Update the groups that have read and write access to a given bucket. If no groups are specified, only the owning group will have read/write access.")
 requiredNamed = parser_update_bucket_permissions.add_argument_group("required named arguments")
 requiredNamed.add_argument("-g, --group", type=str, required=True, dest="group", help="Group the bucket belongs to")
 requiredNamed.add_argument("-b, --bucket", type=str, required=True, dest="bucket", help="Bucket to update")
@@ -672,4 +678,4 @@ if __name__ == "__main__":
         sys.exit(1)
     else:
         args = parser.parse_args()
-        args.func(args)
+        sys.exit(args.func(args))
