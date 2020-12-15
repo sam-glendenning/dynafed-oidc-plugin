@@ -14,8 +14,7 @@ from manage_oidc_json import remove_bucket
 form = cgi.FieldStorage() 
 
 # Get data from fields
-argument = form.getvalue('argument')
-if argument == 'import_bucket':
+if form.getvalue('group') and form.getvalue('bucket') and form.getvalue('public_key') and form.getvalue('private_key'):
     group = form.getvalue('group')
     bucket = form.getvalue('bucket')
     public_key = form.getvalue('public_key')

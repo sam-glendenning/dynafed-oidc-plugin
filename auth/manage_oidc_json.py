@@ -329,24 +329,24 @@ def prefix(args):
     return 0
 
 def update_bucket_cors(args):
-    session = boto3.session.Session()
-    s3_client = session.client(service_name="s3",
-                            endpoint_url="https://s3.echo.stfc.ac.uk",
-                            aws_access_key_id=args.public_key,
-                            aws_secret_access_key=args.private_key,
-                            verify=True)
-
-    cors_rule = {
-        "CORSRules": [
-            {
-                "AllowedMethods": ["GET", "PUT"],
-                "AllowedOrigins": ["https://dynafed.stfc.ac.uk", "https://dynafed2.gridpp.rl.ac.uk", "https://dynafed-test.stfc.ac.uk", "https://dynafed-test2.gridpp.rl.ac.uk"],
-                "MaxAgeSeconds": 3000
-            }
-        ]
-    }
-
     try:
+        session = boto3.session.Session()
+        s3_client = session.client(service_name="s3",
+                                endpoint_url="https://s3.echo.stfc.ac.uk",
+                                aws_access_key_id=args.public_key,
+                                aws_secret_access_key=args.private_key,
+                                verify=True)
+
+        cors_rule = {
+            "CORSRules": [
+                {
+                    "AllowedMethods": ["GET", "PUT"],
+                    "AllowedOrigins": ["https://dynafed.stfc.ac.uk", "https://dynafed2.gridpp.rl.ac.uk", "https://dynafed-test.stfc.ac.uk", "https://dynafed-test2.gridpp.rl.ac.uk"],
+                    "MaxAgeSeconds": 3000
+                }
+            ]
+        }
+    
         s3_client.put_bucket_cors(Bucket=args.bucket, CORSConfiguration=cors_rule)
     except ClientError as e:
         print("S3 error: {}".format(e))
@@ -472,6 +472,9 @@ def import_bucket(args):
         print("OIDC config file not valid, please use the verify function to debug")
         return 1
 
+    if does_bucket_exist(args) == 0:
+        return 1
+
     if update_bucket_cors(args) != 0:
         return 1
 
@@ -487,19 +490,14 @@ def remove_bucket(args):
         print("Config file not valid, please use the verify function to debug")
         return 1
 
+    if does_bucket_exist(args) != 0:
+        return 1
+    
     if update_bucket_cors(args) != 0:
         return 1
 
-    result_remove_from_auth_file = remove_bucket_from_config_file(args)
-    result_remove_from_config_file = remove_bucket_from_config(args)
-
-    if result_remove_from_auth_file != 0 and result_remove_from_config_file != 0:
-        print("Error. Bucket {} either does not exist or is not assigned to group {}".format(args.bucket, args.group))
-        return 1
-
-    if result_remove_from_auth_file != 0 or result_remove_from_config_file != 0:
-        print("Error while removing config for {}. Check {} is missing bucket and {}.conf is missing bucket config info to ensure full removal.".format(args.bucket, args.file, args.group))
-        return 1
+    remove_bucket_from_config_file(args)
+    remove_bucket_from_config(args)
     return 0
 
 def remove_bucket_from_config(args):
