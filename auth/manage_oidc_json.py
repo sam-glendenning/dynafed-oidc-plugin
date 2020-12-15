@@ -235,11 +235,13 @@ def does_group_exist(args):
         print("Config file not valid, please use the verify function to debug")
         return 1
 
+    sanitised_group = args.group.replace('/', '-')
+
     with open(args.file, "r") as f:
         config_json = json.load(f)
 
     for group in config_json["groups"]:
-        if group["name"] == args.group:
+        if group["name"] == sanitised_group:
             return 0
     
     return 1
@@ -252,11 +254,13 @@ def does_bucket_exist(args):
         print("Config file not valid, please use the verify function to debug")
         return 1
 
+    sanitised_group = args.group.replace('/', '-')
+
     with open(args.file, "r") as f:
         config_json = json.load(f)
 
     for group in config_json["groups"]:
-        if group["name"] == args.group:
+        if group["name"] == sanitised_group:
             for bucket in group["buckets"]:
                 if bucket["name"] == args.bucket:
                     return 0
@@ -483,6 +487,9 @@ def remove_bucket(args):
         print("Config file not valid, please use the verify function to debug")
         return 1
 
+    if update_bucket_cors(args) != 0:
+        return 1
+
     result_remove_from_auth_file = remove_bucket_from_config_file(args)
     result_remove_from_config_file = remove_bucket_from_config(args)
 
@@ -496,11 +503,13 @@ def remove_bucket(args):
     return 0
 
 def remove_bucket_from_config(args):
+    sanitised_group = args.group.replace('/', '-')
+
     with open(args.file, "r") as f:
         config_json = json.load(f)
 
     for group in config_json["groups"]:
-        if group["name"] == args.group:
+        if group["name"] == sanitised_group:
             for bucket in group["buckets"]:
                 if bucket["name"] == args.bucket:
                     config_json["groups"].remove(group)
@@ -514,7 +523,8 @@ def remove_bucket_from_config(args):
     return 1
 
 def remove_bucket_from_config_file(args):
-    expected_path = "/etc/ugr/conf.d/{}.conf".format(args.group)
+    sanitised_group = args.group.replace('/', '-')
+    expected_path = "/etc/ugr/conf.d/{}.conf".format(sanitised_group)
     if not os.path.exists(expected_path):
         return 1
 
@@ -645,6 +655,8 @@ parser_remove_bucket = subparsers.add_parser("remove_bucket", help="Remove a buc
 requiredNamed = parser_remove_bucket.add_argument_group('required named arguments')
 requiredNamed.add_argument("-g, --group", type=str, required=True, dest="group", help="Group the bucket belongs to")
 requiredNamed.add_argument("-b, --bucket", type=str, required=True, dest="bucket", help="Bucket to remove")
+requiredNamed.add_argument("--public-key", type=str, required=True, dest="public_key", help="AWS access key")
+requiredNamed.add_argument("--private-key", type=str, required=True, dest="private_key", help="AWS secret key")
 parser_remove_bucket.add_argument("-f, --file", type=str, dest="file", nargs='?', default=DEFAULT_AUTH_FILE_LOCATION, help="Location of the JSON configuration file to act on")
 parser_remove_bucket.set_defaults(func=remove_bucket)
 
