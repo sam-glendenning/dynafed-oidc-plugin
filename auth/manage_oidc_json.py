@@ -348,8 +348,7 @@ def update_bucket_cors(args):
         }
     
         s3_client.put_bucket_cors(Bucket=args.bucket, CORSConfiguration=cors_rule)
-    except ClientError as e:
-        print("S3 error: {}".format(e))
+    except ClientError:
         return 1
 
     return 0
@@ -492,7 +491,7 @@ def remove_bucket(args):
 
     if does_bucket_exist(args) != 0:
         return 1
-    
+
     if update_bucket_cors(args) != 0:
         return 1
 
@@ -688,4 +687,6 @@ if __name__ == "__main__":
         sys.exit(1)
     else:
         args = parser.parse_args()
+        if args.func(args) != 0:
+            print("Operation failed")
         sys.exit(args.func(args))
