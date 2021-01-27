@@ -427,7 +427,7 @@ def add_bucket_to_config(args):
     sanitised_group = args.group.replace('/', '-')
 
     if not args.write_groups:
-        args.write_groups = [sanitised_group]
+        args.write_groups = [args.group]
 
     write_groups_config = {
         "attribute_requirements": {
