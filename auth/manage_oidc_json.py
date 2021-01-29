@@ -1,12 +1,11 @@
-from __future__ import print_function, unicode_literals
 import json
 import argparse
 import sys
 import os
-import socket
 import boto3
 from botocore.exceptions import ClientError
 from oidc_auth import DEFAULT_AUTH_FILE_LOCATION
+import sync
 
 
 # needed for python 2 and 3 compabilility to check str types
@@ -122,8 +121,8 @@ def verify(args):
         sys.stdout = sys.__stdout__
         return 0
     
-    except ValueError:
-        print("Invalid JSON") 
+    except ValueError as e:
+        print("Invalid JSON: {}".format(e)) 
         return 1
 
 def check_valid_attribute_condition(attribute_condition, attr_index, bucket_index):
@@ -463,6 +462,9 @@ def add_bucket_to_config(args):
     return 0
 
 def import_bucket(args):
+    
+    sync.get()
+
     # check config file is valid first
     args.suppress_verify_output = True
     if verify(args) != 0:
@@ -479,9 +481,14 @@ def import_bucket(args):
 
     create_bucket_config(args)
     add_bucket_to_config(args)
+    sync.put()
+    sync.get()
     return 0
 
 def remove_bucket(args):
+    
+    sync.get()
+
     args.suppress_verify_output = True
     if verify(args) != 0:
         # restore stdout
@@ -497,6 +504,8 @@ def remove_bucket(args):
 
     remove_bucket_from_config_file(args)
     remove_bucket_from_config(args)
+    sync.put()
+    sync.get()
     return 0
 
 def remove_bucket_from_config(args):
@@ -538,6 +547,7 @@ def remove_bucket_from_config_file(args):
 
     # Checking if this was the last bucket in the group, should delete the group if this is the case
     if not remaining_config:
+        sync.delete_remote_file(expected_path)
         os.remove(expected_path)
     return 0
 
