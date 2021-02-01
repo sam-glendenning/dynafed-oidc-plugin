@@ -1,5 +1,4 @@
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
+#!/usr/bin/python3.6
 
 # A DynaFed plugin which contacts an OpenID Connect identity provider
 # and then compares token attributes with a JSON file in order to
@@ -15,6 +14,8 @@
 # Return value means:
 # 0 --> access is GRANTED
 # nonzero --> access is DENIED
+#
+# This script is typically called by DynaFed and specified as an authorisation plugin inside /etc/ugr/ugr.conf
 #
 
 import sys
@@ -137,7 +138,6 @@ def isallowed(clientname="unknown", remoteaddr="nowhere", resource="none", mode=
     if "http.OIDC_CLAIM_groups" in user_info:
         user_info["http.OIDC_CLAIM_groups"] = user_info["http.OIDC_CLAIM_groups"].split(
             ",")
-        #user_info["http.OIDC_CLAIM_groups"] = [unicode(i, "utf-8") for i in user_info["http.OIDC_CLAIM_groups"]]
 
     myauthjson = _AuthJSON()
     result = myauthjson.auth_info_for_path(resource)

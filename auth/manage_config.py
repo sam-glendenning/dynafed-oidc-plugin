@@ -1,3 +1,10 @@
+#!/usr/bin/python3.6
+
+"""
+Manages the DynaFed bucket config files, adds, amends and removes config files and verifies the oidc_auth.json files
+Called by import.py and remove.py when buckets need to be imported or removed
+"""
+
 import json
 import argparse
 import sys
@@ -8,81 +15,90 @@ from oidc_auth import DEFAULT_AUTH_FILE_LOCATION
 import sync
 
 
-# needed for python 2 and 3 compabilility to check str types
-try:
-    # python 2 case
-    basestring
-except NameError:
-    # python 3 case
-    basestring = str
-
-# needed for python 2 and 3 compabilility to get user input
-try:
-    # python 2 case
-    input = raw_input
-except NameError:
-    # python 3 case
-    pass
-
-
 def verify(args):
+    """
+    Verifies the oidc_auth.json file is valid
+
+    :param args: Namespace object containing all arguments given from command line, if any
+    :returns: 0 if valid file, non-zero if otherwise
+    """
+
     if args.suppress_verify_output:
         sys.stdout = open(os.devnull, "w")
 
     try:
+        # Check file exists
         with open(args.file, "r") as f:
             config_json = json.load(f)
 
+        # Check file has a prefix (corresponds to federation in /etc/httpd/conf.d/zlcgdm-ugr-dav.conf)
         if "prefix" not in config_json:
             print("Federation prefix not specified")
             return 1
 
+        # Check file has a list of groups
         if "groups" not in config_json:
             print("No groups are specified")
             return 1
 
+        # Check groups is actually a list
         if not isinstance(config_json["groups"], list):
             print("Groups should be a list")
             return 1
 
+        # Check validity of group format
         for index, group in enumerate(config_json["groups"]):
+
+            # Check group is a dict of items
             if not isinstance(group, dict):
                 print("Groups should be a list of objects, group list index " +
                         str(index) + " is not an object")
                 return 1
 
+            # Check group has a name
             if "name" not in group:
                 print("No name specified for group list index " +
                     str(index))
                 return 1
 
+            # Check validity of buckets assigned to groups
             for index2, bucket in enumerate(group["buckets"]):
+
+                # Check bucket has a name
                 if "name" not in bucket:
                     print("No name specified for bucket list index " +
                         str(index2))
                     return 1
 
+                # Check bucket name is a valid string
                 if not isinstance(bucket["name"], basestring):
                     print(str(bucket["name"]) + " is not a string, " +
                         "name should be a string for bucket list index " +
                         str(index2))
                     return 1
 
+                # Check if we have a valid value for propogate_permissions
+                # propogate_permissions is set to true if we want to grant the given permissions for a path to all its child paths
                 if "propogate_permissions" in bucket and not isinstance(bucket["propogate_permissions"], bool):
                     print(str(bucket["propogate_permissions"]) + " is not a bool, " +
                         "propogate_permissions should be a bool for bucket list index " + str(index2))
                     return 1
 
+                # Check bucket has a list of attributes required of the user for them to be authorised access
                 if "allowed_attributes" not in bucket:
                     print("No allowed attributes specified for bucket list index " + str(index2))
                     return 1
 
+                # Check the above is in list format
                 if not isinstance(bucket["allowed_attributes"], list):
                     print(str(bucket["allowed_attributes"]) + " is not a list, " +
                         "allowed_attributes should be a list for bucket list index " + str(index2))
                     return 1
 
+                # Checking each allowed attribute set in a bucket
                 for attr_index, allowed_attributes in enumerate(bucket["allowed_attributes"]):
+
+                    # Check allowed attribute is a dict
                     if not isinstance(allowed_attributes, dict):
                         print("allowed_attributes should be a list of objects, " +
                             "attribute_requirements list index " + str(attr_index) +
@@ -90,21 +106,26 @@ def verify(args):
                             " has an allowed_attributes list item that is not an object")
                         return 1
 
+                    # Check we have at least one key-value pair for specifying what the attribute needs to be, e.g. attribute: group, value: my-group
                     if "attribute_requirements" not in allowed_attributes:
                         print("No attribute_requirements specified in attribute_requirements list index " +
                             str(attr_index) + " endpoint list index " + str(index2))
                         return 1
 
+                    # Check we have a string of allowed permissions for what the user with the given attributes can do
+                    # Currently, only r and l (read and list) are supported as IRIS DynaFed is read-only
                     if "permissions" not in allowed_attributes:
                         print("No permissions specified in attribute_requirements list index " +
                             str(attr_index) + " endpoint list index " + str(index2))
                         return 1
 
+                    # Check each attribute is a dict containing the above
                     if not isinstance(allowed_attributes["attribute_requirements"], dict):
                         print("attribute_requirements should be a dict, in attribute_requirements list index " +
                             str(attr_index) + " endpoint list index " + str(index2))
                         return 1
 
+                    # Validate the format of each attribute
                     if check_valid_attribute_condition(allowed_attributes["attribute_requirements"], attr_index, index) == 1:
                         return 1
 
@@ -126,6 +147,15 @@ def verify(args):
         return 1
 
 def check_valid_attribute_condition(attribute_condition, attr_index, bucket_index):
+    """
+    Validate an allowed attribute dictionary from the oidc_auth.json file
+
+    :param attribute_condition: the attribute as a dict
+    :param attr_index: index of attribute in JSON
+    :param bucket_index: index of bucket in JSON
+    """
+
+    # Check attribute is a dict
     if not isinstance(attribute_condition, dict):
         print("Atrribute conditions should be dicts, in attribute_requirements list index " +
               str(attr_index) + " endpoint list index " + str(bucket_index))
@@ -135,6 +165,7 @@ def check_valid_attribute_condition(attribute_condition, attr_index, bucket_inde
     if len(attribute_condition) == 0:
         return 0
 
+    # Check attribute and value pair are present
     if (("attribute" in attribute_condition and "value" not in attribute_condition) or
        ("value" in attribute_condition and "attribute" not in attribute_condition)):
         print("Atrribute specifications should specify both an attribute name and a value" +
@@ -142,11 +173,13 @@ def check_valid_attribute_condition(attribute_condition, attr_index, bucket_inde
               " endpoint list index " + str(bucket_index))
         return 1
 
+    # Check attribute is a string
     if "attribute" in attribute_condition and not isinstance(attribute_condition["attribute"], basestring):
         print("attribute should be a string, attribute_requirements list index " +
               str(attr_index) + " endpoint list index " + str(bucket_index))
         return 1
 
+    # Check attribute is a pair or an or/and list
     if (("attribute" not in attribute_condition and
          "or" not in attribute_condition and
          "and" not in attribute_condition)):
@@ -159,12 +192,14 @@ def check_valid_attribute_condition(attribute_condition, attr_index, bucket_inde
     operator = "or" if "or" in attribute_condition else ""
     operator = "and" if "and" in attribute_condition else operator
 
+    # If we have an or/and operator, the corresponding value needs to be a list
     if (operator in attribute_condition and not isinstance(attribute_condition[operator], list)):
         print("OR or AND atrribute conditions should contain a list (of attribute conditions)" +
               ", item in attribute_requirements list index " + str(attr_index) +
               " endpoint list index " + str(bucket_index) + " is not a list")
         return 1
 
+    # Loop for each attribute in the operator list if present
     if (operator in attribute_condition):
         for sub_attribute_condition in attribute_condition[operator]:
             check_valid_attribute_condition(sub_attribute_condition, attr_index, bucket_index)
@@ -172,6 +207,13 @@ def check_valid_attribute_condition(attribute_condition, attr_index, bucket_inde
     return 0
 
 def get_groups(args):
+    """
+    Retrieve a list of all groups in the JSON
+
+    :param args: Namespace object containing all arguments given from command line, if any
+    :return: a list of groups
+    """
+
     args.suppress_verify_output = True
     if verify(args) != 0:
         # restore stdout
@@ -188,6 +230,13 @@ def get_groups(args):
     return groups
 
 def get_buckets(args):
+    """
+    Retrieve a list of all buckets in the JSON
+
+    :param args: Namespace object containing all arguments given from command line, if any
+    :return: a list of buckets
+    """
+
     args.suppress_verify_output = True
     if verify(args) != 0:
         # restore stdout
@@ -205,28 +254,45 @@ def get_buckets(args):
     return buckets
 
 def list_groups(args):
+    """
+    Print a list of groups in the JSON to stdout
+
+    :param args: Namespace object containing all arguments given from command line, if any
+    """
+
     for group in get_groups(args):
         print(group)
 
 def list_buckets(args):
+    """
+    Print a list of buckets in the JSON to stdout
+
+    :param args: Namespace object containing all arguments given from command line, if any
+    """
+
     args.suppress_verify_output = True
     if verify(args) != 0:
         # restore stdout
         sys.stdout = sys.__stdout__
         print("Config file not valid, please use the verify function to debug")
-        return []
+        return
 
     with open(args.file, "r") as f:
         config_json = json.load(f)
 
-    groups = []
     for group in config_json["groups"]:
         print(group["name"] + ":")
         for bucket in group["buckets"]:
             print("\t" + bucket["name"])
-    return groups
 
 def does_group_exist(args):
+    """
+    Check if group exists in JSON
+
+    :param args: Namespace object containing all arguments given from command line, if any
+    :returns: 0 if exists, non-zero if not
+    """
+
     args.suppress_verify_output = True
     if verify(args) != 0:
         # restore stdout
@@ -246,6 +312,13 @@ def does_group_exist(args):
     return 1
 
 def does_bucket_exist(args):
+    """
+    Check if bucket exists in JSON
+
+    :param args: Namespace object containing all arguments given from command line, if any
+    :returns: 0 if exists, non-zero if not
+    """
+
     args.suppress_verify_output = True
     if verify(args) != 0:
         # restore stdout
@@ -268,6 +341,13 @@ def does_bucket_exist(args):
     return 1
 
 def group_info(args):
+    """
+    Dump JSON fields for given group
+
+    :param args: Namespace object containing all arguments given from command line, if any
+    :returns: 0 if success, non-zero if not
+    """
+
     args.suppress_verify_output = True
     if verify(args) != 0:
         # restore stdout
@@ -287,6 +367,13 @@ def group_info(args):
     return 1
 
 def bucket_info(args):
+    """
+    Dump JSON fields for a given bucket
+
+    :param args: Namespace object containing all arguments given from command line, if any
+    :returns: 0 if success, non-zero if not
+    """
+
     args.suppress_verify_output = True
     if verify(args) != 0:
         # restore stdout
@@ -309,6 +396,14 @@ def bucket_info(args):
     return 1
 
 def prefix(args):
+    """
+    Print the prefix in the auth JSON
+    If a prefix argument is specified, replace the prefix in the JSON with the given value
+
+    :param args: Namespace object containing all arguments given from command line, if any
+    :returns: 0 if success, non-zero if not
+    """
+
     args.suppress_verify_output = True
     if verify(args) != 0:
         # restore stdout
@@ -328,6 +423,15 @@ def prefix(args):
     return 0
 
 def update_bucket_cors(args):
+    """
+    Grants the correct CORS permissions to all imported buckets from Echo so they can be accessed through DynaFed
+    GET is needed at a minimum
+    PUT is included despite uploading not working correctly
+
+    :param args: Namespace object containing all arguments given from command line, if any
+    :returns: 0 if success, non-zero if not
+    """
+
     try:
         session = boto3.session.Session()
         s3_client = session.client(service_name="s3",
@@ -340,7 +444,7 @@ def update_bucket_cors(args):
             "CORSRules": [
                 {
                     "AllowedMethods": ["GET", "PUT"],
-                    "AllowedOrigins": ["https://dynafed.stfc.ac.uk", "https://dynafed2.gridpp.rl.ac.uk", "https://dynafed-test.stfc.ac.uk", "https://dynafed-test2.gridpp.rl.ac.uk"],
+                    "AllowedOrigins": ["https://dynafed.stfc.ac.uk", "https://dynafed1.gridpp.rl.ac.uk", "https://dynafed2.gridpp.rl.ac.uk", "https://dynafed-test.stfc.ac.uk", "https://dynafed-test1.gridpp.rl.ac.uk", "https://dynafed-test2.gridpp.rl.ac.uk"],
                     "MaxAgeSeconds": 3000
                 }
             ]
@@ -348,11 +452,18 @@ def update_bucket_cors(args):
     
         s3_client.put_bucket_cors(Bucket=args.bucket, CORSConfiguration=cors_rule)
     except ClientError:
+        print("Error: failed to update bucket CORS rules.")
         return 1
 
     return 0
 
 def create_bucket_config(args):
+    """
+    Creates config information for an imported bucket and adds it to the group .conf file that is importing it
+
+    :param args: Namespace object containing all arguments given from command line, if any
+    """
+
     sanitised_group = args.group.replace('/', '-')
 
     full_bucket_name = sanitised_group + "-" + args.bucket
@@ -371,7 +482,14 @@ def create_bucket_config(args):
     with open("/etc/ugr/conf.d/" + sanitised_group + ".conf", "a") as f:
         f.writelines(bucket_config)
 
-def add_group_to_config(args):
+def add_group_to_json(args):
+    """
+    Add a new group entry to the auth JSON file 
+
+    :param args: Namespace object containing all arguments given from command line, if any
+    :returns: 0 if success, non-zero if not
+    """
+
     sanitised_group = args.group.replace('/', '-')
     new_group = {
         "name": sanitised_group,
@@ -385,26 +503,42 @@ def add_group_to_config(args):
         "buckets": []
     }
 
-    with open(args.file, "r") as f:
-        config = json.load(f)
+    try:
+        with open(args.file, "r") as f:
+            config = json.load(f)
+    except FileNotFoundError:
+        print("Error: could not find given auth JSON file")
+        return 1
+
     config["groups"].append(new_group)
 
     with open(args.file, "w") as f:
         json.dump(config, f, indent=4)
 
-def add_bucket_to_config(args):
+    return 0
+
+def add_bucket_to_json(args):
+    """
+    Add a new bucket entry to a given group in the auth JSON file
+
+    :param args: Namespace object containing all arguments given from command line, if any
+    :returns: 0 if success, non-zero if not
+    """
+
     if does_bucket_exist(args) == 0:
-        print("Bucket already exists, use update_bucket_permissions if you want to update it.")
+        print("Error: bucket already exists, use update_bucket_permissions if you want to update it.")
         return 1
 
     if does_group_exist(args) != 0:
-        add_group_to_config(args)
+        add_group_to_json(args)
 
     new_bucket = {
         "name": args.bucket,
         "propogate_permissions": True,
         "allowed_attributes": [],
     }
+
+    # read_groups and write_groups are lists to separate users with read and write permissions on buckets
 
     if args.read_groups:
         read_groups_config = {
@@ -444,8 +578,12 @@ def add_bucket_to_config(args):
 
     new_bucket["allowed_attributes"].append(write_groups_config)
 
-    with open(args.file, "r") as f:
-        config = json.load(f)
+    try:
+        with open(args.file, "r") as f:
+            config = json.load(f)
+    except FileNotFoundError:
+        print("Error: could not find given auth JSON file")
+        return 1
     
     for group in config["groups"]:
         if group["name"] == sanitised_group:
@@ -462,8 +600,18 @@ def add_bucket_to_config(args):
     return 0
 
 def import_bucket(args):
+    """
+    Used to import a new bucket into IRIS DynaFed
+    Refreshes local copy of files first to make sure config is up to date from remote copy on bucket
+    Then creates the necessary config and pushes it to the bucket
+
+    :param args: Namespace object containing all arguments given from command line, if any
+    :returns: 0 if success, non-zero if not. Various numbers are returned which will allow for the correct error response to be displayed on the web UI
+    """
     
-    sync.get()
+    res_get = sync.get()
+    if res_get != 0:
+        return 4
 
     # check config file is valid first
     args.suppress_verify_output = True
@@ -474,20 +622,38 @@ def import_bucket(args):
         return 1
 
     if does_bucket_exist(args) == 0:
-        return 1
+        return 2
 
+    # Validate bucket exists in Echo (and update CORS)
     if update_bucket_cors(args) != 0:
-        return 1
+        return 3
 
     create_bucket_config(args)
-    add_bucket_to_config(args)
-    sync.put()
-    sync.get()
+    add_bucket_to_json(args)
+
+    res_put = sync.put()
+    if res_put != 0:
+        return 5
+
+    res_get = sync.get()
+    if res_get != 0:
+        return 4
+
     return 0
 
 def remove_bucket(args):
+    """
+    Used to remove a bucket from IRIS DynaFed
+    Refreshes local copy of files first to make sure config is up to date from remote copy on bucket
+    Then delete the remote config and push updates to bucket
+
+    :param args: Namespace object containing all arguments given from command line, if any
+    :returns: 0 if success, non-zero if not. Various numbers are returned which will allow for the correct error response to be displayed on the web UI
+    """
     
-    sync.get()
+    res_get = sync.get()
+    if res_get != 0:
+        return 4
 
     args.suppress_verify_output = True
     if verify(args) != 0:
@@ -497,18 +663,33 @@ def remove_bucket(args):
         return 1
 
     if does_bucket_exist(args) != 0:
-        return 1
+        return 2
 
+    # Validate bucket exists in Echo
     if update_bucket_cors(args) != 0:
-        return 1
+        return 3
 
     remove_bucket_from_config_file(args)
-    remove_bucket_from_config(args)
-    sync.put()
-    sync.get()
+    remove_bucket_from_json(args)
+
+    res_put = sync.put()
+    if res_put != 0:
+        return 5
+
+    res_get = sync.get()
+    if res_get != 0:
+        return 4
+
     return 0
 
-def remove_bucket_from_config(args):
+def remove_bucket_from_json(args):
+    """
+    Remove a given bucket from the auth JSON file
+
+    :param args: Namespace object containing all arguments given from command line, if any
+    :returns: 0 if success, non-zero if not
+    """
+
     sanitised_group = args.group.replace('/', '-')
 
     with open(args.file, "r") as f:
@@ -529,6 +710,13 @@ def remove_bucket_from_config(args):
     return 1
 
 def remove_bucket_from_config_file(args):
+    """
+    Remove bucket config info from its group config file
+
+    :param args: Namespace object containing all arguments given from command line, if any
+    :returns: 0 if success, non-zero if not
+    """
+
     sanitised_group = args.group.replace('/', '-')
     expected_path = "/etc/ugr/conf.d/{}.conf".format(sanitised_group)
     if not os.path.exists(expected_path):
@@ -552,6 +740,13 @@ def remove_bucket_from_config_file(args):
     return 0
 
 def remove_group(args):
+    """
+    Remove an entire group and its imported buckets. Delete from auth JSON and delete .conf file
+
+    :param args: Namespace object containing all arguments given from command line, if any
+    :returns: 0 if success, non-zero if not
+    """
+
     # check config file is valid first
     args.suppress_verify_output = True
     if verify(args) != 0:
@@ -560,7 +755,7 @@ def remove_group(args):
         print("OIDC config file not valid, please use the verify function to debug")
         return 1 
 
-    result_remove_config_file = remove_group_from_config(args)
+    result_remove_config_file = remove_group_from_json(args)
     result_remove_from_config = remove_group_config_file(args)
 
     if result_remove_config_file != 0 and result_remove_from_config != 0:
@@ -572,7 +767,14 @@ def remove_group(args):
         return 1
     return 0
 
-def remove_group_from_config(args):
+def remove_group_from_json(args):
+    """
+    Remove group info from auth JSON
+
+    :param args: Namespace object containing all arguments given from command line, if any
+    :returns: 0 if success, non-zero if not
+    """
+
     sanitised_group = args.group.replace('/', '-')
 
     with open(args.file, "r") as f:
@@ -587,6 +789,13 @@ def remove_group_from_config(args):
     return 1
 
 def remove_group_config_file(args):
+    """
+    Remove group config file
+
+    :param args: Namespace object containing all arguments given from command line, if any
+    :returns: 0 if success, non-zero if not
+    """
+
     sanitised_group = args.group.replace('/', '-')
     expected_path = "/etc/ugr/conf.d/{}.conf".format(sanitised_group)
     if not os.path.exists(expected_path):
@@ -595,18 +804,26 @@ def remove_group_config_file(args):
     return 0
 
 def update_bucket_permissions(args):
+    """
+    Update permissions a group has on one of its assigned buckets
+
+    :param args: Namespace object containing all arguments given from command line, if any
+    :returns: 0 if success, non-zero if not
+    """
+
     if does_bucket_exist(args) != 0:
         print("No bucket matching {} found".format(args.bucket))
         return 1
 
-    result_remove = remove_bucket_from_config(args)
-    result_add = add_bucket_to_config(args)
+    result_remove = remove_bucket_from_json(args)
+    result_add = add_bucket_to_json(args)
     if result_remove != 0 or result_add != 0:
         print("An unknown error occurred. The bucket is likely misconfigured. Use the verify function to debug.")
         return 1
 
     return 0
 
+#####################################################
 
 # top level argument parser
 parser = argparse.ArgumentParser()
@@ -697,6 +914,5 @@ if __name__ == "__main__":
         sys.exit(1)
     else:
         args = parser.parse_args()
-        if args.func(args) != 0:
-            print("Operation failed")
-        sys.exit(args.func(args))
+        args.func(args)
+    sys.exit(0)
