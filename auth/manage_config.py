@@ -15,6 +15,15 @@ from oidc_auth import DEFAULT_AUTH_FILE_LOCATION
 import sync
 
 
+# needed for python 2 and 3 compabilility to check str types	
+try:	
+    # python 2 case	
+    basestring	
+except NameError:	
+    # python 3 case	
+    basestring = str
+
+
 def verify(args):
     """
     Verifies the oidc_auth.json file is valid
