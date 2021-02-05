@@ -461,6 +461,7 @@ def update_bucket_cors(args):
     
         s3_client.put_bucket_cors(Bucket=args.bucket, CORSConfiguration=cors_rule)
     except ClientError:
+        #This can also be because the bucket no longer exists
         print("Error: failed to update bucket CORS rules.")
         return 1
 
@@ -674,9 +675,19 @@ def remove_bucket(args):
     if does_bucket_exist(args) != 0:
         return 2
 
-    # Validate bucket exists in Echo
-    if update_bucket_cors(args) != 0:
-        return 3
+    #TODO potential issue with this. We need to validate the bucket keys are correct and this is how we do it
+    #However, issue with this occurs if the bucket no longer exists in Echo. This currently prevents it from being
+    #removed as an entry in DynaFed. 
+    #Potential solution: if we are an admin, bypass this keys check. This would mean the user cannot remove a bucket
+    #entry that doesn't exist. Not sure how to get around this while keeping the key validation in place
+    #TL;DR not a massive issue but still annoying
+
+    admin_operation = args.admin_operation and "dynafed/admins" in args.groups
+
+    if not admin_operation:
+        # Validate bucket exists in Echo
+        if update_bucket_cors(args) != 0:
+            return 3
 
     remove_bucket_from_config_file(args)
     remove_bucket_from_json(args)
