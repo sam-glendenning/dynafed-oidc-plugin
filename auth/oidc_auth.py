@@ -139,6 +139,9 @@ def isallowed(clientname="unknown", remoteaddr="nowhere", resource="none", mode=
         user_info["http.OIDC_CLAIM_groups"] = user_info["http.OIDC_CLAIM_groups"].split(
             ",")
 
+    if "dynafed/admins" in user_info["http.OIDC_CLAIM_groups"]:
+        return 0
+
     myauthjson = _AuthJSON()
     result = myauthjson.auth_info_for_path(resource)
     if result is None:

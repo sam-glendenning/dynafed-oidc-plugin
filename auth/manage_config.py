@@ -682,12 +682,15 @@ def remove_bucket(args):
     #entry that doesn't exist. Not sure how to get around this while keeping the key validation in place
     #TL;DR not a massive issue but still annoying
 
-    admin_operation = args.admin_operation and "dynafed/admins" in args.groups
+    if (args.admin_operation is not None and args.groups is not None):
+        admin_operation = args.admin_operation and "dynafed/admins" in args.groups
 
-    if not admin_operation:
-        # Validate bucket exists in Echo
-        if update_bucket_cors(args) != 0:
-            return 3
+        if not admin_operation:
+            # Validate bucket exists in Echo
+            if update_bucket_cors(args) != 0:
+                return 3
+    else:
+        update_bucket_cors(args)
 
     remove_bucket_from_config_file(args)
     remove_bucket_from_json(args)

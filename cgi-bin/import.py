@@ -6,7 +6,7 @@ Sends it off to manage_config.py
 """
 
 # Import modules for CGI handling 
-import cgi, cgitb 
+import cgi 
 import argparse
 import sys
 
