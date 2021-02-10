@@ -1,38 +1,63 @@
 #!/usr/bin/python3.6
 
 import json
-from oidc_auth import DEFAULT_AUTH_FILE_LOCATION
 
 BLACKLIST_FILE = "/etc/ugr/conf.d/blacklist.json"
 
-def blacklist_bucket(bucket_name):
-    try:
-        with open(BLACKLIST_FILE, "r") as f:
-            blacklist = json.load(f)
-    except FileNotFoundError:
-        blacklist = {"buckets": []}
+def add_to_blacklist(args):
 
-    if bucket_name not in blacklist["buckets"]:
-        blacklist["buckets"].append(bucket_name)
+    if (args.bucket is not None and args.admin_operation is not None and args.groups is not None):
+        admin_operation = args.admin_operation and "dynafed/admins" in args.groups
 
-    with open(BLACKLIST_FILE, "w") as f:
-        json.dump(blacklist, f, indent=4)
+        if not admin_operation:
+            return 1
 
-def whitelist_bucket(bucket_name):
-    try:
-        with open(BLACKLIST_FILE, "r") as f:
-            blacklist = json.load(f)
-    except FileNotFoundError:
-        file_json = {"buckets": []}
-        with open(BLACKLIST_FILE, "w") as f:
-            json.dump(file_json, indent=4)
-            return
+        try:
+            with open(BLACKLIST_FILE, "r") as f:
+                blacklist = json.load(f)
+        except FileNotFoundError:
+            blacklist = {"buckets": []}
 
-    if bucket_name in blacklist["buckets"]:
-        blacklist["buckets"].remove(bucket_name)
+        if args.bucket not in blacklist["buckets"]:
+            blacklist["buckets"].append(args.bucket)
 
         with open(BLACKLIST_FILE, "w") as f:
             json.dump(blacklist, f, indent=4)
+
+            return 0
+        else:
+            return 2
+    else:
+        return 1
+
+def remove_from_blacklist(args):
+
+    if (args.bucket is not None and args.admin_operation is not None and args.groups is not None):
+        admin_operation = args.admin_operation and "dynafed/admins" in args.groups
+
+        if not admin_operation:
+            return 1
+
+        try:
+            with open(BLACKLIST_FILE, "r") as f:
+                blacklist = json.load(f)
+        except FileNotFoundError:
+            file_json = {"buckets": []}
+            with open(BLACKLIST_FILE, "w") as f:
+                json.dump(file_json, indent=4)
+                return
+
+        if args.bucket in blacklist["buckets"]:
+            blacklist["buckets"].remove(args.bucket)
+
+            with open(BLACKLIST_FILE, "w") as f:
+                json.dump(blacklist, f, indent=4)
+
+            return 0
+        else:
+            return 2
+    else:
+        return 1
 
 def get_blacklist():
     try:
