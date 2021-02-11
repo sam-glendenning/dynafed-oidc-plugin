@@ -18,8 +18,9 @@ from blacklisting import add_to_blacklist
 RETURN_CODES = {
     0: 'Status: 201 success',
     1: 'Status: 403 unauthorised',
-    2: 'Status 409 resource exists',
-    3: 'Status: 400 bad request'
+    2: 'Status: 500 cannot synchronise files',
+    3: 'Status: 409 resource exists',
+    4: 'Status: 400 bad request'
 }
 
 # Create instance of FieldStorage 
@@ -36,5 +37,5 @@ if form.getvalue('bucket') and form.getvalue('groups[]') and form.getvalue('admi
     result = add_to_blacklist(args)
     print(RETURN_CODES[result])
 else:
-    print(RETURN_CODES[2])
+    print(RETURN_CODES[3])
 print()

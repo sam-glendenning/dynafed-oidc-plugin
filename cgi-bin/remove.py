@@ -20,9 +20,8 @@ RETURN_CODES = {
     1: 'Status: 500 authorisation config error',
     2: 'Status: 409 bucket does not exist in IRIS DynaFed',
     3: 'Status: 404 bucket does not exist in Echo',
-    4: 'Status: 500, cannot synchronise files',
-    5: 'Status: 500, cannot synchronise files',
-    6: 'Status: 400, invalid client request'
+    4: 'Status: 500 cannot synchronise files',
+    5: 'Status: 400 invalid client request'
 }
 
 # Create instance of FieldStorage 
@@ -43,12 +42,12 @@ if form.getvalue('group') and form.getvalue('bucket'):
         private_key = form.getvalue('private_key')
         args = argparse.Namespace(group=group, bucket=bucket, public_key=public_key, private_key=private_key, file="/etc/grid-security/oidc_auth.json")
     else:
-        print(RETURN_CODES[6])
+        print(RETURN_CODES[5])
         print()
         sys.exit(0)
 
     result = remove_bucket(args)
     print(RETURN_CODES[result])
 else:
-    print(RETURN_CODES[6])
+    print(RETURN_CODES[5])
 print()

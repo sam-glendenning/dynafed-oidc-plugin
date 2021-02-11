@@ -20,8 +20,9 @@ RETURN_CODES = {
     1: 'Status: 500 authorisation config error',
     2: 'Status: 409 bucket already exists in IRIS DynaFed',
     3: 'Status: 404 bucket does not exist in Echo',
-    4: 'Status: 500, cannot synchronise files',
-    5: 'Status: 500, cannot synchronise files'
+    4: 'Status: 500 cannot synchronise files',
+    5: 'Status: 403 bucket is blacklisted',
+    6: 'Status: 400 invalid client request'
 }
 
 # Create instance of FieldStorage 
@@ -50,5 +51,5 @@ if form.getvalue('group') and form.getvalue('bucket') and form.getvalue('public_
     result = import_bucket(args)
     print(RETURN_CODES[result])
 else:
-    print('Status: 400 bad request')
+    print(RETURN_CODES[6])
 print()

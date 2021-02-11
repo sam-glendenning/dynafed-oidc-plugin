@@ -94,6 +94,8 @@ def get():
 
         if key == 'oidc_auth.json':     # authorisation rules file
             filepath = '/etc/grid-security/' + key
+        elif key == 'blacklist.json':     # blacklist file
+            filepath = '/etc/ugr/conf.d/' + key
 
         try:
             obj = conn.get_object(Bucket=BUCKET_NAME, Key=key)
@@ -148,6 +150,14 @@ def put():
     except FileNotFoundError:
         print("Error: could not find or open /etc/grid-security/oidc_auth.json. File does not exist!")
         return 1
+
+    blacklist_json = '/etc/ugr/conf.d/blacklist.json'
+    key = ntpath.basename(blacklist_json)
+
+    try:
+        conn.put_object(Body=open(blacklist_json, 'rb'), Bucket=BUCKET_NAME, Key=key)
+    except FileNotFoundError:
+        print("Warning: no blacklist file at /etc/ugr/conf.d/blacklist.json.")
 
     return 0
 

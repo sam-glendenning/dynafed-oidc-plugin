@@ -21,8 +21,10 @@
 import sys
 import json
 import time
+#import blacklisting
 
 DEFAULT_AUTH_FILE_LOCATION = "/etc/grid-security/oidc_auth.json"
+BLACKLIST_FILE = "/etc/ugr/conf.d/blacklist.json"
 
 # use this to strip trailing slashes so that we don't trip up any equalities due to them
 def strip_end(string, suffix):
@@ -33,7 +35,6 @@ def strip_end(string, suffix):
 
 # a class that loads the JSON configution file that details the authorisation info for paths
 # this is called during the initialisation of the module
-
 
 class _AuthJSON(object):
     auth_dict = {}
@@ -124,6 +125,15 @@ def process_condition(condition, user_info):
         return True
     # TODO: extend to other operators if we need them?
 
+def get_blacklist():
+    try:
+        with open(BLACKLIST_FILE, "r") as f:
+            blacklist = json.load(f)
+    except FileNotFoundError:
+        return []
+
+    return blacklist["buckets"]
+
 
 # The main function that has to be invoked from ugr to determine if a request
 # has to be performed or not
@@ -139,8 +149,8 @@ def isallowed(clientname="unknown", remoteaddr="nowhere", resource="none", mode=
         user_info["http.OIDC_CLAIM_groups"] = user_info["http.OIDC_CLAIM_groups"].split(
             ",")
 
-    if "dynafed/admins" in user_info["http.OIDC_CLAIM_groups"]:
-        return 0
+    #if "dynafed/admins" in user_info["http.OIDC_CLAIM_groups"]:
+    #    return 0
 
     myauthjson = _AuthJSON()
     result = myauthjson.auth_info_for_path(resource)
@@ -162,6 +172,10 @@ def isallowed(clientname="unknown", remoteaddr="nowhere", resource="none", mode=
         # without defaulting so that the entire federation is readable
         # might be useful elsewhere too
         return 1
+
+    bucket = strip_end(matched_path, "/").split("/")[-1]
+    if bucket in get_blacklist():
+       return 1
 
     for item in auth_info["allowed_attributes"]:
         # use process_condition to check whether we match or not
