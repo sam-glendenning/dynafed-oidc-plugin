@@ -679,7 +679,7 @@ def remove_bucket(args):
     if does_bucket_exist(args) != 0:
         return 2
 
-    #TODO potential issue with this. We need to validate the bucket keys are correct and this is how we do it
+    #Potential issue: we need to validate the bucket keys are correct and this is how we do it
     #However, issue with this occurs if the bucket no longer exists in Echo. This currently prevents it from being
     #removed as an entry in DynaFed. 
     #Potential solution: if we are an admin, bypass this keys check. This would mean the user cannot remove a bucket

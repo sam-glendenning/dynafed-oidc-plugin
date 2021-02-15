@@ -11,8 +11,7 @@ def add_to_blacklist(args):
         if not admin_operation:
             return 1
 
-        res_get = sync.get()
-        if res_get != 0:
+        if sync.get() != 0:
             return 2
         
         try:
@@ -27,7 +26,9 @@ def add_to_blacklist(args):
             with open(BLACKLIST_FILE, "w") as f:
                 json.dump(blacklist, f, indent=4)
 
-            return sync.put()
+            if sync.put() != 0:
+                return 2
+            return 0
         else:
             return 3
     else:
@@ -41,8 +42,7 @@ def remove_from_blacklist(args):
         if not admin_operation:
             return 1
 
-        res_get = sync.get()
-        if res_get != 0:
+        if sync.get() != 0:
             return 2
 
         try:
@@ -60,7 +60,9 @@ def remove_from_blacklist(args):
             with open(BLACKLIST_FILE, "w") as f:
                 json.dump(blacklist, f, indent=4)
 
-            return sync.put()
+            if sync.put() != 0:
+                return 2
+            return 0
         else:
             return 3
     else:
