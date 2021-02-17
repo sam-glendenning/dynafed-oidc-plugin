@@ -37,5 +37,5 @@ if form.getvalue('bucket') and form.getvalue('groups[]') and form.getvalue('admi
     result = remove_from_blacklist(args)
     print(RETURN_CODES[result])
 else:
-    print(RETURN_CODES[3])
+    print(RETURN_CODES[4])
 print()

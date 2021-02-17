@@ -106,6 +106,8 @@ def get():
         with open(filepath, 'w') as f:
             f.write(obj['Body'].read().decode('utf-8'))
         os.chown(filepath, uid, gid)        # change owner of file to apache so it can be amended later through the web UI if necessary
+        if key == 'oidc_auth.json' or key == 'blacklist.json':
+            os.chmod(filepath, 0o646)       # JSON files need 646 permissions to be read from and written to by our Python scripts
 
     # Deleting .conf files not in bucket
     allfiles = [f for f in os.listdir('/etc/ugr/conf.d/') if os.path.isfile(os.path.join('/etc/ugr/conf.d', f))]
