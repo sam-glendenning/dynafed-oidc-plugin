@@ -21,7 +21,6 @@
 import sys
 import json
 import time
-#import blacklisting
 
 DEFAULT_AUTH_FILE_LOCATION = "/etc/grid-security/oidc_auth.json"
 BLACKLIST_FILE = "/etc/ugr/conf.d/blacklist.json"
