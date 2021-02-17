@@ -94,6 +94,8 @@ def get():
 
         if key == 'oidc_auth.json':     # authorisation rules file
             filepath = '/etc/grid-security/' + key
+        elif key == 'blacklist.json':     # blacklist file
+            filepath = '/etc/ugr/conf.d/' + key
 
         try:
             obj = conn.get_object(Bucket=BUCKET_NAME, Key=key)
@@ -104,6 +106,8 @@ def get():
         with open(filepath, 'w') as f:
             f.write(obj['Body'].read().decode('utf-8'))
         os.chown(filepath, uid, gid)        # change owner of file to apache so it can be amended later through the web UI if necessary
+        if key == 'oidc_auth.json' or key == 'blacklist.json':
+            os.chmod(filepath, 0o646)       # JSON files need 646 permissions to be read from and written to by our Python scripts
 
     # Deleting .conf files not in bucket
     allfiles = [f for f in os.listdir('/etc/ugr/conf.d/') if os.path.isfile(os.path.join('/etc/ugr/conf.d', f))]
@@ -148,6 +152,14 @@ def put():
     except FileNotFoundError:
         print("Error: could not find or open /etc/grid-security/oidc_auth.json. File does not exist!")
         return 1
+
+    blacklist_json = '/etc/ugr/conf.d/blacklist.json'
+    key = ntpath.basename(blacklist_json)
+
+    try:
+        conn.put_object(Body=open(blacklist_json, 'rb'), Bucket=BUCKET_NAME, Key=key)
+    except FileNotFoundError:
+        print("Warning: no blacklist file at /etc/ugr/conf.d/blacklist.json.")
 
     return 0
 

@@ -13,6 +13,7 @@ import boto3
 from botocore.exceptions import ClientError
 from oidc_auth import DEFAULT_AUTH_FILE_LOCATION
 import sync
+import blacklisting
 
 
 # needed for python 2 and 3 compabilility to check str types	
@@ -461,6 +462,7 @@ def update_bucket_cors(args):
     
         s3_client.put_bucket_cors(Bucket=args.bucket, CORSConfiguration=cors_rule)
     except ClientError:
+        #This can also be because the bucket no longer exists
         print("Error: failed to update bucket CORS rules.")
         return 1
 
@@ -622,6 +624,9 @@ def import_bucket(args):
     if res_get != 0:
         return 4
 
+    if args.bucket in blacklisting.get_blacklist():
+        return 5
+
     # check config file is valid first
     args.suppress_verify_output = True
     if verify(args) != 0:
@@ -642,7 +647,7 @@ def import_bucket(args):
 
     res_put = sync.put()
     if res_put != 0:
-        return 5
+        return 4
 
     res_get = sync.get()
     if res_get != 0:
@@ -663,27 +668,40 @@ def remove_bucket(args):
     res_get = sync.get()
     if res_get != 0:
         return 4
-
+    
     args.suppress_verify_output = True
     if verify(args) != 0:
         # restore stdout
         sys.stdout = sys.__stdout__
         print("Config file not valid, please use the verify function to debug")
         return 1
-
+    
     if does_bucket_exist(args) != 0:
         return 2
 
-    # Validate bucket exists in Echo
-    if update_bucket_cors(args) != 0:
-        return 3
+    #Potential issue: we need to validate the bucket keys are correct and this is how we do it
+    #However, issue with this occurs if the bucket no longer exists in Echo. This currently prevents it from being
+    #removed as an entry in DynaFed. 
+    #Potential solution: if we are an admin, bypass this keys check. This would mean the user cannot remove a bucket
+    #entry that doesn't exist. Not sure how to get around this while keeping the key validation in place
+    #TL;DR not a massive issue but still annoying
+
+    if hasattr(args, 'admin_operation') and hasattr(args, 'groups'):
+        admin_operation = args.admin_operation and "dynafed/admins" in args.groups
+        
+        if not admin_operation:
+            # Validate bucket exists in Echo
+            if update_bucket_cors(args) != 0:
+                return 3
+    elif update_bucket_cors(args) != 0:
+            return 3
 
     remove_bucket_from_config_file(args)
     remove_bucket_from_json(args)
 
     res_put = sync.put()
     if res_put != 0:
-        return 5
+        return 4
 
     res_get = sync.get()
     if res_get != 0:
