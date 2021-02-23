@@ -51,7 +51,7 @@ def remove_from_blacklist(args):
         except FileNotFoundError:
             file_json = {"buckets": []}
             with open(BLACKLIST_FILE, "w") as f:
-                json.dump(file_json, indent=4)
+                json.dump(file_json, f, indent=4)
                 return
 
         if args.bucket in blacklist["buckets"]:
@@ -69,6 +69,8 @@ def remove_from_blacklist(args):
         return 1
 
 def get_blacklist():
+    sync.get()
+
     try:
         with open(BLACKLIST_FILE, "r") as f:
             blacklist = json.load(f)

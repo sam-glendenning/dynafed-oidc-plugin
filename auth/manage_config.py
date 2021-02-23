@@ -16,6 +16,22 @@ import sync
 import blacklisting
 
 
+BLANK_OIDC_AUTH = {
+    "prefix": "/gridpp",
+    "base_info": [
+        {
+            "allowed_attributes": [
+                {
+                    "attribute_requirements": {},
+                    "permissions": "l"
+                }
+            ],
+            "propogate_permissions": False
+        }
+    ],
+    "groups": []
+}
+
 # needed for python 2 and 3 compabilility to check str types	
 try:	
     # python 2 case	
@@ -24,6 +40,14 @@ except NameError:
     # python 3 case	
     basestring = str
 
+def get_oidc_auth():
+    if sync.get() != 0:
+        print("Synchronisation of files failed.")
+
+    if not os.path.isfile(DEFAULT_AUTH_FILE_LOCATION):
+        print("No remote oidc_auth.json file found. Creating new from template.")
+        with open(DEFAULT_AUTH_FILE_LOCATION, 'w') as file:
+            json.dump(BLANK_OIDC_AUTH, file, indent=4)
 
 def verify(args):
     """
@@ -40,7 +64,12 @@ def verify(args):
         # Check file exists
         with open(args.file, "r") as f:
             config_json = json.load(f)
-
+    except FileNotFoundError:
+        get_oidc_auth()
+        with open(args.file, "r") as f:
+            config_json = json.load(f)
+    
+    try:
         # Check file has a prefix (corresponds to federation in /etc/httpd/conf.d/zlcgdm-ugr-dav.conf)
         if "prefix" not in config_json:
             print("Federation prefix not specified")
