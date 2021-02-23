@@ -23,8 +23,26 @@ import pwd
 import grp
 from botocore.exceptions import ClientError
 
-BUCKET_NAME = 'iris-dynafed-config'     # name of bucket containing the master copy
 
+def get_bucket_name():
+    """
+    Get the name of the bucket to use for synchronising files
+
+    :return: the bucket name
+    """
+
+    try:
+        with open('/etc/ugr/conf.d/config-bucket-credentials.json', 'r') as file:
+            data = json.load(file)
+            bucket = data["bucket"]
+    except ValueError:
+        print("Error: JSON file incorrectly configured. Must contain s3-access-key and s3-secret-key.")
+        return None
+    except FileNotFoundError:
+        print("Error. Could not find /etc/ugr/conf.d/config-bucket-credentials.json.")
+        return None
+
+    return bucket
 
 def setup():
     """
@@ -38,6 +56,7 @@ def setup():
             data = json.load(file)
             s3_access_key = data["s3-access-key"]
             s3_secret_key = data["s3-secret-key"]
+            bucket = data["bucket"]
     except ValueError:
         print("Error: JSON file incorrectly configured. Must contain s3-access-key and s3-secret-key.")
         return None
@@ -54,7 +73,7 @@ def setup():
                 use_ssl=True               # uncomment if you are not using ssl
                 )
     except ClientError:
-        print("Error: connection to Echo endpoint could not be established. Verify S3 keys and endpoint URL.")
+        print("Error: connection to Echo endpoint could not be established. Verify S3 keys and bucket name.")
         return None
 
     return conn
@@ -73,6 +92,11 @@ def get():
         print("Failed to sync files.")
         return 1
 
+    bucket = get_bucket_name()
+    if not bucket:
+        print("Failed to get name of bucket to synchronise files with. Check config-bucket-credentials.json.")
+        return 1
+
     # Getting ID numbers for apache user for changing owner of .conf files
     try:
         uid = pwd.getpwnam('apache').pw_uid
@@ -83,7 +107,7 @@ def get():
 
     keys = []
     paginator = conn.get_paginator('list_objects_v2')
-    pages = paginator.paginate(Bucket=BUCKET_NAME)
+    pages = paginator.paginate(Bucket=bucket)
     for page in pages:
         for obj in page['Contents']:
             keys.append(obj['Key'])
@@ -98,7 +122,7 @@ def get():
             filepath = '/etc/ugr/conf.d/' + key
 
         try:
-            obj = conn.get_object(Bucket=BUCKET_NAME, Key=key)
+            obj = conn.get_object(Bucket=bucket, Key=key)
         except ClientError:
             print("Error: Failed getting objects from upstream")
             return 1
@@ -131,6 +155,11 @@ def put():
     if not conn:
         print("Failed to sync files.")
         return 1
+
+    bucket = get_bucket_name()
+    if not bucket:
+        print("Failed to get name of bucket to synchronise files with. Check config-bucket-credentials.json.")
+        return 1
     
     allfiles = [f for f in os.listdir('/etc/ugr/conf.d/') if os.path.isfile(os.path.join('/etc/ugr/conf.d', f))]
     allfiles = [f for f in allfiles if f.endswith('.conf')]
@@ -139,7 +168,7 @@ def put():
         key = ntpath.basename(file)
 
         try:
-            conn.put_object(Body=open('/etc/ugr/conf.d/' + key, 'rb'), Bucket=BUCKET_NAME, Key=key)
+            conn.put_object(Body=open('/etc/ugr/conf.d/' + key, 'rb'), Bucket=bucket, Key=key)
         except FileNotFoundError:
             print("Error: could not find or open {} for upload.".format(file))
             return 1
@@ -148,7 +177,7 @@ def put():
     key = ntpath.basename(oidc_auth_json)
 
     try:
-        conn.put_object(Body=open(oidc_auth_json, 'rb'), Bucket=BUCKET_NAME, Key=key)
+        conn.put_object(Body=open(oidc_auth_json, 'rb'), Bucket=bucket, Key=key)
     except FileNotFoundError:
         print("Error: could not find or open /etc/grid-security/oidc_auth.json. File does not exist!")
         return 1
@@ -157,7 +186,7 @@ def put():
     key = ntpath.basename(blacklist_json)
 
     try:
-        conn.put_object(Body=open(blacklist_json, 'rb'), Bucket=BUCKET_NAME, Key=key)
+        conn.put_object(Body=open(blacklist_json, 'rb'), Bucket=bucket, Key=key)
     except FileNotFoundError:
         print("Warning: no blacklist file at /etc/ugr/conf.d/blacklist.json.")
 
@@ -175,9 +204,14 @@ def delete_remote_file(path):
     if not conn:
         print("Failed to delete remote file.")
         return 1
+
+    bucket = get_bucket_name()
+    if not bucket:
+        print("Failed to get name of bucket to synchronise files with. Check config-bucket-credentials.json.")
+        return 1
     
     key = ntpath.basename(path)
-    conn.delete_object(Bucket=BUCKET_NAME, Key=key)
+    conn.delete_object(Bucket=bucket, Key=key)
     return 0
 
 
