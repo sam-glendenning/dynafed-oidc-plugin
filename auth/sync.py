@@ -93,7 +93,7 @@ def get():
         return 1
 
     bucket = get_bucket_name()
-    if not bucket:
+    if bucket is None:
         print("Failed to get name of bucket to synchronise files with. Check config-bucket-credentials.json.")
         return 1
 
@@ -157,7 +157,7 @@ def put():
         return 1
 
     bucket = get_bucket_name()
-    if not bucket:
+    if bucket is None:
         print("Failed to get name of bucket to synchronise files with. Check config-bucket-credentials.json.")
         return 1
     
@@ -206,7 +206,7 @@ def delete_remote_file(path):
         return 1
 
     bucket = get_bucket_name()
-    if not bucket:
+    if bucket is None:
         print("Failed to get name of bucket to synchronise files with. Check config-bucket-credentials.json.")
         return 1
     
