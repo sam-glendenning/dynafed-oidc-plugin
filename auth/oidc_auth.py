@@ -1,5 +1,4 @@
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
+#!/usr/bin/python3.6
 
 # A DynaFed plugin which contacts an OpenID Connect identity provider
 # and then compares token attributes with a JSON file in order to
@@ -16,11 +15,15 @@
 # 0 --> access is GRANTED
 # nonzero --> access is DENIED
 #
+# This script is typically called by DynaFed and specified as an authorisation plugin inside /etc/ugr/ugr.conf
+#
 
 import sys
 import json
 import time
 
+DEFAULT_AUTH_FILE_LOCATION = "/etc/grid-security/oidc_auth.json"
+BLACKLIST_FILE = "/etc/ugr/conf.d/blacklist.json"
 
 # use this to strip trailing slashes so that we don't trip up any equalities due to them
 def strip_end(string, suffix):
@@ -32,19 +35,23 @@ def strip_end(string, suffix):
 # a class that loads the JSON configution file that details the authorisation info for paths
 # this is called during the initialisation of the module
 
-
 class _AuthJSON(object):
     auth_dict = {}
     path_list = []
 
     def __init__(self):
-        with open("/etc/ugr/conf.d/oidc_auth.json", "r") as f:
+        with open(DEFAULT_AUTH_FILE_LOCATION, "r") as f:
             self.auth_dict = json.load(f)
             prefix = self.auth_dict["prefix"]
+            self.path_list.append(prefix)
             # prepopulate path list so we don't repeatedly parse it
-            for endpoint in self.auth_dict["endpoints"]:
-                self.path_list.append(
-                    strip_end(strip_end(prefix, "/") + endpoint["endpoint_path"], "/"))
+            for group in self.auth_dict["groups"]:
+                group_name = group["name"]
+                self.path_list.append(prefix + "/" + group_name)
+                
+                for bucket in group["buckets"]:
+                    bucket_name = bucket["name"]
+                    self.path_list.append(prefix + "/" + group_name + "/" + bucket_name)
 
     # we want to apply the auth that matches the path most closely,
     # so we have to search the dict for path prefixes that match
@@ -56,6 +63,7 @@ class _AuthJSON(object):
         split_path = stripped_path.split("/")
         prefix = self.auth_dict["prefix"]
         i = 0
+
         while i < len(split_path):
             p = ""
             if i == 0:
@@ -66,14 +74,15 @@ class _AuthJSON(object):
                 p = "/".join(split_path[:-i])
 
             if p in self.path_list:
-                for endpoint in self.auth_dict["endpoints"]:
-                    if strip_end(strip_end(prefix, "/") + endpoint["endpoint_path"], "/") == p:
-                        return {"path": p, "auth_info": endpoint}
+                if p == prefix:
+                    return {"path": p, "auth_info": self.auth_dict["base_info"][0]}
+                for group in self.auth_dict["groups"]:
+                    if prefix + "/" + group["name"] == p:       # if the user is navigating to /gridpp/group-name
+                        return {"path": p, "auth_info": group}
+                    for bucket in group["buckets"]:
+                        if prefix + "/" + group["name"] + "/" + bucket["name"] == p:      # if the user is navigating to a bucket inside a group (/gridpp/group-name/bucket-name)
+                            return {"path": p, "auth_info": bucket}
             i += 1
-
-
-# Initialize a global instance of the authlist class, to be used inside the isallowed() function
-myauthjson = _AuthJSON()
 
 
 # given a authorisation condition and the user info, does the user satisfy the condition?
@@ -115,6 +124,15 @@ def process_condition(condition, user_info):
         return True
     # TODO: extend to other operators if we need them?
 
+def get_blacklist():
+    try:
+        with open(BLACKLIST_FILE, "r") as f:
+            blacklist = json.load(f)
+    except FileNotFoundError:
+        return []
+
+    return blacklist["buckets"]
+
 
 # The main function that has to be invoked from ugr to determine if a request
 # has to be performed or not
@@ -125,13 +143,15 @@ def isallowed(clientname="unknown", remoteaddr="nowhere", resource="none", mode=
     # OIDCPassIDTokenAs payload
 
     user_info = dict(keys)
-    print user_info
 
     if "http.OIDC_CLAIM_groups" in user_info:
         user_info["http.OIDC_CLAIM_groups"] = user_info["http.OIDC_CLAIM_groups"].split(
             ",")
-        #user_info["http.OIDC_CLAIM_groups"] = [unicode(i, "utf-8") for i in user_info["http.OIDC_CLAIM_groups"]]
 
+    if "dynafed/admins" in user_info["http.OIDC_CLAIM_groups"]:
+       return 0
+
+    myauthjson = _AuthJSON()
     result = myauthjson.auth_info_for_path(resource)
     if result is None:
         # failed to match anything, means the path isn't supposed protected by this plugin
@@ -152,9 +172,9 @@ def isallowed(clientname="unknown", remoteaddr="nowhere", resource="none", mode=
         # might be useful elsewhere too
         return 1
 
-    for ip in auth_info["allowed_ip_addresses"]:
-        if ip["ip"] == remoteaddr and mode in ip["permissions"]:
-            return 0
+    bucket = strip_end(matched_path, "/").split("/")[-1]
+    if bucket in get_blacklist():
+       return 1
 
     for item in auth_info["allowed_attributes"]:
         # use process_condition to check whether we match or not
