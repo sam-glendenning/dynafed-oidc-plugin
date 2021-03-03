@@ -719,10 +719,15 @@ def remove_bucket(args):
         admin_operation = args.admin_operation and "dynafed/admins" in args.groups
         
         if not admin_operation:
+
             # Validate bucket exists in Echo
             if update_bucket_cors(args) != 0:
-                return 3
+
+                # Bucket could not be matched in Echo. Bucket may no longer exist
+                if do_keys_match_bucket(args) != 0:
+                    return 3
     elif update_bucket_cors(args) != 0:
+        if do_keys_match_bucket(args) != 0:
             return 3
 
     remove_bucket_from_config_file(args)
@@ -878,6 +883,43 @@ def update_bucket_permissions(args):
         return 1
 
     return 0
+
+def do_keys_match_bucket(args):
+    """
+    Called if a bucket is being removed but it was not able to be matched to anything in Echo
+    This typically happens if the bucket has been deleted from Echo and so its keys cannot be validated
+    This function tests to see if the supplied bucket credentials match those in the group config file
+    This allows the user to remove the bucket from DynaFed using the credentials they originally supplied to import it
+    If this fails, the bucket will have to be removed by an admin
+    Admins can bypass the credential check on buckets, hence removing any bucket from the system they wish
+
+    :param args: Namespace object containing all arguments given from command line, if any
+    :returns: 0 if success, non-zero if not
+    """
+
+    sanitised_group = args.group.replace('/', '-')
+    expected_path = "/etc/ugr/conf.d/{}.conf".format(sanitised_group)
+    if not os.path.exists(expected_path):
+        return 1
+
+    with open(expected_path, "r") as f:
+        lines = f.read().splitlines()
+    expected_public_line = "locplugin.{}-{}.s3.pub_key: ".format(sanitised_group, args.bucket)
+    expected_private_line = "locplugin.{}-{}.s3.priv_key: ".format(sanitised_group, args.bucket)
+    public_key = private_key = None
+
+    for line in lines:
+        if line.startswith(expected_public_line):
+            public_key = line.split(expected_public_line)[1]
+        elif line.startswith(expected_private_line):
+            private_key = line.split(expected_private_line)[1]
+        
+        if public_key is not None and private_key is not None:
+            if public_key == args.public_key and private_key == args.private_key:
+                return 0
+            break
+        
+    return 1
 
 #####################################################
 
